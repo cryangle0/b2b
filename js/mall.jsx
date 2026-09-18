@@ -531,9 +531,9 @@ function CompanyView({ s }) {
   const main = s.session.role === "dealer_main";
   const [cert, setCert] = useState(dealer?.address || "");
   return (
-    <div className="wrap" style={{ padding: "32px 0 80px", maxWidth: 860 }}>
+    <div className="wrap" style={{ padding: "40px 0 80px", maxWidth: 860 }}>
       <h1 style={{ fontSize: 36, fontWeight: 400 }}>企业</h1>
-      <div className="kvs" style={{ margin: "20px 0" }}>
+      <div className="kvs" style={{ margin: "28px 0 32px" }}>
         <i>档案</i><b>{dealer?.name} · {dealer?.erpId}</b>
         <i>认证</i><b>{dealer?.cert}</b>
         <i>等级</i><b>{dealer?.level}</b>
@@ -542,13 +542,15 @@ function CompanyView({ s }) {
         <>
           <Field label="认证地址 / 资料"><input value={cert} onChange={(e) => setCert(e.target.value)} /></Field>
           <Btn sm onClick={() => Taovo.saveDealer(dealer.id, { address: cert, cert: "已认证" })}>保存企业信息</Btn>
-          <h2 style={{ fontSize: 22, margin: "32px 0 12px", fontWeight: 400 }}>子账号</h2>
-          <DataTable columns={[{ key: "name", title: "姓名" }, { key: "account", title: "账号" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }, { key: "op", title: "", render: (r) => <button onClick={(e) => { e.stopPropagation(); Taovo.toggleUser(r.id); }}>{r.status === "active" ? "停用" : "启用"}</button> }]} rows={subs} />
-          <div className="row" style={{ marginTop: 16 }}>
-            <Field label="姓名"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="账号"><input value={form.account} onChange={(e) => setForm({ ...form, account: e.target.value })} /></Field>
-          </div>
-          <Btn sm onClick={() => Taovo.addSub(form.name, form.account)}>创建子账号</Btn>
+          <section className="section-block">
+            <h2>子账号</h2>
+            <DataTable columns={[{ key: "name", title: "姓名" }, { key: "account", title: "账号" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }, { key: "op", title: "", render: (r) => <button onClick={(e) => { e.stopPropagation(); Taovo.toggleUser(r.id); }}>{r.status === "active" ? "停用" : "启用"}</button> }]} rows={subs} />
+            <div className="form-grid">
+              <Field label="姓名"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+              <Field label="账号"><input value={form.account} onChange={(e) => setForm({ ...form, account: e.target.value })} /></Field>
+              <Btn sm onClick={() => Taovo.addSub(form.name, form.account)}>创建子账号</Btn>
+            </div>
+          </section>
         </>
       ) : <p className="muted">子账号不能管理企业。</p>}
     </div>
@@ -656,6 +658,14 @@ function LoginView({ portal }) {
   const [account, setAccount] = useState(portal === "ops" ? "admin" : "dealer");
   const [password, setPassword] = useState("123456");
   const img = window.TAOVO_SEED.images.hero;
+  useEffect(() => {
+    document.documentElement.classList.add("lock");
+    document.body.classList.add("lock");
+    return () => {
+      document.documentElement.classList.remove("lock");
+      document.body.classList.remove("lock");
+    };
+  }, []);
   return (
     <div className="login">
       <div className="login-visual">
@@ -691,10 +701,28 @@ function LoginView({ portal }) {
   );
 }
 
+function MallChrome({ s, path, notice, children }) {
+  return (
+    <div className={"mall-shell" + (notice ? " has-notice" : "")}>
+      <div className="chrome">
+        {notice}
+        <MallNav s={s} path={path} />
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function MallApp({ s, path, parts, query }) {
   if (path === "/login") return <LoginView portal="mall" />;
   if (path === "/ops-login") return <LoginView portal="ops" />;
-  if (path === "/apply") return <div><MallNav s={s} path={path} /><ApplyView /></div>;
+  if (path === "/apply") {
+    return (
+      <MallChrome s={s} path={path}>
+        <div className="page"><ApplyView /></div>
+      </MallChrome>
+    );
+  }
   if (!s.session || !String(s.session.role).startsWith("dealer")) {
     return <LoginView portal="mall" />;
   }
@@ -718,15 +746,15 @@ function MallApp({ s, path, parts, query }) {
   else if (path === "/notices") body = <SimpleList title="提醒" rows={s.notices} columns={[{ key: "title", title: "内容" }, { key: "time", title: "时间" }, { key: "read", title: "状态", render: (r) => r.read ? "已读" : "未读" }, { key: "go", title: "", render: (r) => <span><a href={r.href} onClick={() => Taovo.markNotice(r.id)}>打开</a> · <button onClick={() => Taovo.markNotice(r.id)}>标已读</button></span> }]} />;
   else body = <Empty title="页面不存在" text={path} />;
 
+  const notice = s.notices.some((n) => !n.read) && path === "/" ? (
+    <div className="notice"><span>{s.notices.find((n) => !n.read).title}</span><a href="#/notices">查看</a></div>
+  ) : null;
+
   return (
-    <div>
-      {s.notices.some((n) => !n.read) && path === "/" && (
-        <div className="notice"><span>{s.notices.find((n) => !n.read).title}</span><a href="#/notices">查看</a></div>
-      )}
-      <MallNav s={s} path={path} />
+    <MallChrome s={s} path={path} notice={notice}>
       <div className="page">{body}</div>
       <MallTab path={path} />
-    </div>
+    </MallChrome>
   );
 }
 
