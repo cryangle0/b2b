@@ -9,7 +9,24 @@ window.Taowo = (function () {
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const s = JSON.parse(raw);
+        (s.users || []).forEach((u) => {
+          const seedU = (seed.users || []).find((x) => x.id === u.id);
+          if (seedU) {
+            if (!u.phone) u.phone = seedU.phone || "";
+            if (!u.email) u.email = seedU.email || "";
+            if (!u.created) u.created = seedU.created || "";
+          }
+          if (u.phone == null) u.phone = "";
+          if (u.email == null) u.email = "";
+          if (u.created == null) u.created = "";
+          if (u.lastLogin == null) u.lastLogin = "";
+        });
+        s.pendingBags = s.pendingBags || {};
+        s.mediaFolders = s.mediaFolders || [{ id: "F-main", name: "主图" }, { id: "F-detail", name: "细节" }];
+        return s;
+      }
     } catch (e) {}
     return boot();
   }
@@ -145,6 +162,8 @@ window.Taowo = (function () {
       if (portal === "ops" && isDealer) return { ok: false, msg: "该账号没有运营后台权限" };
       if (portal === "mall" && !isDealer) return { ok: false, msg: "请使用经销商账号进入订货台" };
       state.session = clone(u);
+      u.lastLogin = now();
+      state.session.lastLogin = u.lastLogin;
       state.logs.unshift({
         id: Date.now(),
         user: u.name,
@@ -469,6 +488,10 @@ window.Taowo = (function () {
           role: "dealer_main",
           org: a.company,
           dealerId: did,
+          phone: a.phone || "",
+          email: "",
+          created: now(),
+          lastLogin: "",
           status: "active",
         });
         a.account = acc;
@@ -566,6 +589,13 @@ window.Taowo = (function () {
             href: "#/p/" + h.pid,
           });
         }
+      });
+      const byWh = {};
+      rows.forEach((r) => {
+        if (r.warehouse) byWh[r.warehouse] = (byWh[r.warehouse] || 0) + 1;
+      });
+      (state.warehouses || []).forEach((w) => {
+        if (byWh[w.name]) w.skus = (Number(w.skus) || 0) + byWh[w.name];
       });
       emit();
       toast("已写入 " + n + " 条可订量" + (hits.length ? "，并通知心愿单经销商" : ""));
@@ -938,10 +968,14 @@ window.Taowo = (function () {
       toast("已绑定 " + d.name);
     },
     createWarehouse(form) {
+      if (!(form.name || "").trim()) {
+        toast("请填写仓库名", "err");
+        return;
+      }
       const id = "WH-" + String(Date.now()).slice(-4);
       state.warehouses.unshift({
         id,
-        name: form.name,
+        name: form.name.trim(),
         city: form.city || "",
         skus: 0,
         sync: form.sync || "手动",
@@ -961,7 +995,8 @@ window.Taowo = (function () {
         else state.cart.push({ pid: r.pid, size: r.size, qty: r.qty, price: r.price, selected: true });
       });
       emit();
-      toast("订购表中的数量已写入购物袋");
+      toast("订购表中的数量已写入购物袋" + (preview.errors.length ? "；部分行未导入" : ""));
+      if (preview.errors.length) toast(preview.errors.slice(0, 3).join("；"), "err");
       return preview;
     },
     updateOrderLines(orderId, lines) {

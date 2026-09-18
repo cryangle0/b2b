@@ -1,5 +1,5 @@
 const { useState } = React;
-const { Icon, Photo, go, Btn, Field, Modal, Empty, Money, statusLabel, DataTable, downloadText, LoginView, productThumb, groupOrderLines, qtyOfSize } = window;
+const { Icon, Photo, go, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, DataTable, downloadText, LoginView, productThumb, groupOrderLines, qtyOfSize } = window;
 
 function opsAllowed(role, href) {
   if (role === "ops_admin") return true;
@@ -128,7 +128,7 @@ function CmsView({ s }) {
       <Field label={device + " 顶栏导航（用 / 分隔）"}><input value={nav} onChange={(e) => setNav(e.target.value)} /></Field>
       <Field label="产品下拉（每行：名称|#锚点）"><textarea value={productMenu} onChange={(e) => setProductMenu(e.target.value)} rows={4} /></Field>
       <Field label="资产下拉（每行：名称|#锚点）"><textarea value={assetMenu} onChange={(e) => setAssetMenu(e.target.value)} rows={4} /></Field>
-      <Field label="首页分类一行（产品 / 订单 / 资产）"><textarea value={catNav} onChange={(e) => setCatNav(e.target.value)} rows={4} /></Field>
+      <Field label="首页分类一行（产品 / 订单 / 资产；名称为产品时自动带现货/期货/订货会下拉）"><textarea value={catNav} onChange={(e) => setCatNav(e.target.value)} rows={4} /></Field>
       <Field label="首屏轮播（每行：标题|说明|#链接|图片URL）"><textarea value={hero} onChange={(e) => setHero(e.target.value)} rows={5} /></Field>
       <Field label="首页楼层（每行：标题|spot 或 futures 或 fair）"><textarea value={floors} onChange={(e) => setFloors(e.target.value)} rows={3} /></Field>
       <Field label="专场条（标题|说明|#链接|图片URL）"><input value={banner} onChange={(e) => setBanner(e.target.value)} /></Field>
@@ -207,18 +207,19 @@ function ApplyDetail({ s, id }) {
 }
 
 function AccountsOps({ s }) {
-  const rows = s.users.filter((u) => String(u.role).startsWith("dealer"));
+  const rows = s.users.filter((u) => String(u.role).startsWith("dealer") && u.status !== "pending");
   return (
     <div>
-      <div className="hrow"><div><h1>账号绑定</h1><p>已审核通过的经销商账号列表，进入详情绑定档案</p></div></div>
+      <div className="hrow"><div><h1>账号绑定</h1><p>已审核通过的经销商账号。点进详情看字段并绑定档案。</p></div></div>
       <DataTable
         onRow={(r) => go("/ops/accounts/" + r.id)}
         columns={[
           { key: "account", title: "账号" },
           { key: "name", title: "姓名" },
-          { key: "org", title: "当前企业" },
-          { key: "dealerId", title: "档案", render: (r) => r.dealerId || "未绑定" },
-          { key: "status", title: "状态", render: (r) => statusLabel(r.status) },
+          { key: "phone", title: "手机" },
+          { key: "role", title: "角色", render: (r) => r.role === "dealer_sub" ? "子账号" : "主账号" },
+          { key: "dealerId", title: "绑定经销商", render: (r) => r.dealerId || "" },
+          { key: "status", title: "状态", render: (r) => accountStatus(r.status) },
         ]}
         rows={rows}
       />
@@ -231,12 +232,22 @@ function AccountBindDetail({ s, id }) {
   const [q, setQ] = useState("");
   const [pick, setPick] = useState(u?.dealerId || "");
   if (!u) return <Empty title="账号不存在" action={<Btn onClick={() => go("/ops/accounts")}>返回</Btn>} />;
+  const bound = s.dealers.find((d) => d.id === u.dealerId);
   const hits = s.dealers.filter((d) => !q || (d.name + d.id + d.short + d.erpId + d.city).toLowerCase().includes(q.toLowerCase()));
   return (
     <div>
       <div className="hrow">
-        <div><h1>{u.account}</h1><p>{u.name} · {u.role} · 当前档案 {u.dealerId || "未绑定"}</p></div>
+        <div><h1>{u.account}</h1><p>{u.role === "dealer_sub" ? "子账号" : "主账号"} · {accountStatus(u.status)}</p></div>
         <Btn sm ghost onClick={() => go("/ops/accounts")}>返回列表</Btn>
+      </div>
+      <div className="kvs" style={{ marginBottom: 20 }}>
+        <i>姓名</i><b>{u.name || ""}</b>
+        <i>手机</i><b>{u.phone || ""}</b>
+        <i>邮箱</i><b>{u.email || ""}</b>
+        <i>企业显示名</i><b>{u.org || ""}</b>
+        <i>绑定经销商</i><b>{bound ? bound.name + "（" + bound.id + "）" : ""}</b>
+        <i>开通时间</i><b>{u.created || ""}</b>
+        <i>最近登录</i><b>{u.lastLogin || ""}</b>
       </div>
       <Field label="模糊搜索经销商档案"><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="企业名 / 档案号 / 城市 / ERP" /></Field>
       <DataTable
@@ -297,7 +308,6 @@ function ProductsOps({ s, type }) {
     }
     return true;
   });
-  const ids = sel.length ? sel : rows.map((p) => p.id);
   const cols = [
     { key: "ck", title: "", width: 36, render: (r) => <input type="checkbox" checked={sel.includes(r.id)} onClick={(e) => e.stopPropagation()} onChange={() => setSel(sel.includes(r.id) ? sel.filter((x) => x !== r.id) : sel.concat(r.id))} /> },
     { key: "img", title: "图", render: (r) => <div className="ops-thumb"><Photo src={productThumb(r)} alt={r.name} color={r.color} /></div> },
@@ -351,10 +361,10 @@ function ProductsOps({ s, type }) {
         </Field>
       </div>
       <div className="row" style={{ marginBottom: 12 }}>
-        <Btn sm onClick={() => Taowo.batchStatus(ids, { status: "live", orderable: true })}>批量上架</Btn>
-        <Btn sm ghost onClick={() => Taowo.batchStatus(ids, { status: "off" })}>批量下架</Btn>
-        <Btn sm onClick={() => Taowo.batchStatus(ids, { orderable: true, status: "live" })}>批量可订</Btn>
-        <Btn sm danger onClick={() => Taowo.batchStatus(ids, { orderable: false })}>批量不可订</Btn>
+        <Btn sm onClick={() => sel.length ? Taowo.batchStatus(sel, { status: "live", orderable: true }) : Taowo.toast("请先勾选商品", "err")}>批量上架</Btn>
+        <Btn sm ghost onClick={() => sel.length ? Taowo.batchStatus(sel, { status: "off" }) : Taowo.toast("请先勾选商品", "err")}>批量下架</Btn>
+        <Btn sm onClick={() => sel.length ? Taowo.batchStatus(sel, { orderable: true, status: "live" }) : Taowo.toast("请先勾选商品", "err")}>批量可订</Btn>
+        <Btn sm danger onClick={() => sel.length ? Taowo.batchStatus(sel, { orderable: false }) : Taowo.toast("请先勾选商品", "err")}>批量不可订</Btn>
       </div>
       {futures && (
         <div className="row" style={{ marginBottom: 12, alignItems: "end" }}>
@@ -448,21 +458,54 @@ function ImageOps({ s }) {
   const [view, setView] = useState("grid");
   const [sel, setSel] = useState([]);
   const [name, setName] = useState("新文件夹");
+  const [lastMatch, setLastMatch] = useState([]);
   const rows = (s.media || []).filter((m) => !folder || m.folderId === folder);
+  function ingest(list) {
+    const result = Taowo.matchImages(list, folder);
+    setLastMatch(result);
+    const ok = result.filter((x) => x.ok).length;
+    Taowo.toast("已导入，匹配款号 " + ok + " / " + result.length);
+  }
   function readFiles(list) {
     const files = Array.from(list || []);
-    const zip = files.filter((f) => /\.zip$/i.test(f.name));
+    const zips = files.filter((f) => /\.zip$/i.test(f.name));
     const imgs = files.filter((f) => !/\.zip$/i.test(f.name));
-    if (zip.length) Taowo.toast("浏览器原型无法解压 ZIP，请解压后多选图片，或选择文件夹导入", "err");
-    imgs.forEach((f) => {
-      const r = new FileReader();
-      r.onload = () => Taowo.matchImages([{ name: f.name, url: String(r.result) }], folder);
-      r.readAsDataURL(f);
+    zips.forEach((file) => {
+      if (!window.JSZip) {
+        Taowo.toast("ZIP 解压库未加载，请改用文件夹导入", "err");
+        return;
+      }
+      window.JSZip.loadAsync(file).then((zip) => {
+        const jobs = [];
+        zip.forEach((path, entry) => {
+          if (entry.dir || !/\.(png|jpe?g|webp|gif|bmp)$/i.test(path)) return;
+          const fname = path.split("/").pop();
+          jobs.push(entry.async("base64").then((b64) => {
+            const ext = (fname.split(".").pop() || "jpeg").toLowerCase().replace("jpg", "jpeg");
+            return { name: fname, url: "data:image/" + ext + ";base64," + b64 };
+          }));
+        });
+        return Promise.all(jobs);
+      }).then((found) => {
+        if (!found.length) return Taowo.toast("压缩包里没有图片", "err");
+        ingest(found);
+      }).catch(() => Taowo.toast("ZIP 无法解压", "err"));
     });
+    if (imgs.length) {
+      const pending = [];
+      imgs.forEach((f) => {
+        const r = new FileReader();
+        r.onload = () => {
+          pending.push({ name: f.name, url: String(r.result) });
+          if (pending.length === imgs.length) ingest(pending);
+        };
+        r.readAsDataURL(f);
+      });
+    }
   }
   return (
     <div>
-      <div className="hrow"><div><h1>图片管理</h1><p>文件夹、本地/文件夹导入、显示图、批量删除；矩阵或列表。ZIP 需先解压（原型无法在浏览器内解压）。</p></div></div>
+      <div className="hrow"><div><h1>图片管理</h1><p>文件夹、本地/ZIP/文件夹导入。ZIP 会解压，文件名含款号则自动匹配商品。支持矩阵和列表、批量删除。</p></div></div>
       <div className="row" style={{ marginBottom: 12, flexWrap: "wrap" }}>
         <Field label="文件夹">
           <select value={folder} onChange={(e) => setFolder(e.target.value)}>
@@ -500,6 +543,12 @@ function ImageOps({ s }) {
               <span>{m.name}</span>
             </label>
           ))}
+        </div>
+      )}
+      {lastMatch.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 500, marginBottom: 8 }}>最近导入匹配</h2>
+          <DataTable columns={[{ key: "name", title: "文件" }, { key: "pid", title: "款号" }, { key: "ok", title: "结果", render: (r) => r.ok ? "已匹配" : "未匹配" }]} rows={lastMatch} />
         </div>
       )}
     </div>

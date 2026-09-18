@@ -93,6 +93,10 @@ function statusLabel(s) {
   })[s] || s;
 }
 
+function accountStatus(s) {
+  return ({ active: "已生效", stopped: "停用", pending: "待审" })[s] || statusLabel(s);
+}
+
 function Toasts({ list }) {
   if (!list?.length) return null;
   return <div className="toastwrap">{list.map((t) => <div className={"toast " + (t.kind || "")} key={t.id}>{t.text}</div>)}</div>;
@@ -172,5 +176,5 @@ function filterProducts(products, { type, fair, q, brand, ip, cat, sub, wave, se
 }
 
 Object.assign(window, {
-  Photo, Icon, go, useHash, useStore, Btn, Field, Modal, Empty, Money, statusLabel, Toasts, DataTable, Qty, downloadText, productThumb, filterProducts, groupOrderLines, qtyOfSize,
+  Photo, Icon, go, useHash, useStore, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, Toasts, DataTable, Qty, downloadText, productThumb, filterProducts, groupOrderLines, qtyOfSize,
 });

@@ -1,5 +1,5 @@
 const { useState, useEffect } = React;
-const { Icon, Photo, go, Btn, Field, Modal, Empty, Money, statusLabel, DataTable, Qty, downloadText, productThumb, filterProducts } = window;
+const { Icon, Photo, go, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, DataTable, Qty, downloadText, productThumb, filterProducts } = window;
 
 function MallNav({ s, path }) {
   const count = (s.cart || []).reduce((n, c) => n + c.qty, 0);
@@ -118,22 +118,30 @@ function HomeView({ s }) {
   const h = heroes[i];
   return (
     <div>
-      <div className="shop-teams wrap">
-        <div className="shop-teams-copy">
-          <b>分类</b>
-        </div>
-        <div className="shop-teams-row cats-3">
+      <div className="home-cats wrap">
+        <b>分类</b>
+        <nav>
           {(s.cms.categoryNav || [
             { label: "产品", href: "#/shop/spot" },
             { label: "订单", href: "#/orders" },
             { label: "资产", href: "#/contracts" },
-          ]).map((c) => (
-            <a className="team-dot" key={c.label} href={c.href}>
-              <span style={{ background: "#111" }}>{c.label.slice(0, 1)}</span>
-              {c.label}
-            </a>
-          ))}
-        </div>
+          ]).map((c) => {
+            const product = c.label === "产品" || /shop|product/i.test(c.href || "");
+            if (!product) return <a key={c.label} href={c.href}>{c.label}</a>;
+            return (
+              <div className="nav-drop" key={c.label}>
+                <a href={c.href || "#/shop/spot"}>产品</a>
+                <div className="drop">
+                  {(s.cms.productMenu || [
+                    { label: "现货", href: "#/shop/spot" },
+                    { label: "期货", href: "#/shop/futures" },
+                    { label: "订货会", href: "#/fair" },
+                  ]).map((m) => <a key={m.href} href={m.href}>{m.label}</a>)}
+                </div>
+              </div>
+            );
+          })}
+        </nav>
       </div>
       <section className="hero">
         <img src={h.img} alt="" onError={(e) => { e.target.style.display = "none"; }} />
@@ -174,6 +182,8 @@ function ShopView({ s, type, fair, query }) {
   let list = filterProducts(s.products, { type, fair, ...f });
   if (sort === "low") list = [...list].sort((a, b) => a.price - b.price);
   if (sort === "high") list = [...list].sort((a, b) => b.price - a.price);
+  if (sort === "idlow") list = [...list].sort((a, b) => a.id.localeCompare(b.id));
+  if (sort === "idhigh") list = [...list].sort((a, b) => b.id.localeCompare(a.id));
   if (sort === "new") list = [...list].sort((a, b) => (b.badge === "新品") - (a.badge === "新品"));
   const enabled = dict.filters;
   const title = fair ? "订货会" : type === "futures" ? "期货" : "现货";
@@ -198,6 +208,10 @@ function ShopView({ s, type, fair, query }) {
   }
   function onUpload(file) {
     if (!file) return;
+    if (/\.xlsx?$/i.test(file.name)) {
+      Taowo.toast("请另存为 CSV 后上传。浏览器读不了 xlsx。", "err");
+      return;
+    }
     const r = new FileReader();
     r.onload = () => Taowo.importOrderSheetToCart(String(r.result));
     r.readAsText(file);
@@ -205,7 +219,6 @@ function ShopView({ s, type, fair, query }) {
   return (
     <div className="plp wrap">
       <aside className="plp-side">
-        <div className="plp-brand">{title}</div>
         {chips.length > 0 && (
           <div className="plp-sel">
             <h3>已选</h3>
@@ -225,15 +238,20 @@ function ShopView({ s, type, fair, query }) {
         {enabled.includes("性别") && <FilterGroup title="性别" items={dict.genders} value={f.gender} onChange={(v) => toggle("gender", v)} />}
       </aside>
       <div className="plp-main">
-        <div className="plp-toolbar">
-          <label className="btn sm ghost">上传订购表
-            <input type="file" accept=".csv,.txt,.xlsx" hidden onChange={(e) => onUpload(e.target.files[0])} />
+        <div className="plp-head">
+          <h1>{title}</h1>
+          <label className="btn sm">上传订购表
+            <input type="file" accept=".csv,.txt" hidden onChange={(e) => onUpload(e.target.files[0])} />
           </label>
+        </div>
+        <div className="plp-toolbar">
           <input className="plp-search" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} placeholder="模糊搜索款号 / 名称 / 品牌" />
           <select value={sort} onChange={(e) => setSort(e.target.value)}>
             <option value="hot">默认</option>
             <option value="low">价格升序</option>
             <option value="high">价格降序</option>
+            <option value="idlow">款号升序</option>
+            <option value="idhigh">款号降序</option>
             <option value="new">新品</option>
           </select>
           <Btn sm ghost onClick={exportTpl}>下载订购表</Btn>
@@ -482,19 +500,21 @@ function ImportView({ s }) {
   );
 }
 
+function downloadOrderCsv(orders, name) {
+  const header = "单号,类型,状态,款号,尺码,数量,已发,单价,金额,下单时间";
+  const body = orders.flatMap((o) => o.lines.map((l) => [o.id, o.type === "futures" ? "期货" : "现货", statusLabel(o.status), l.pid, l.size, l.qty, l.shipped || 0, l.price, l.qty * l.price, o.created].join(",")));
+  downloadText(name, [header, ...body].join("\n"), "text/csv");
+}
+
 function OrdersView({ s, id }) {
   const mine = s.orders.filter((o) => o.dealerId === s.session.dealerId && o.type !== "erp");
   const [tab, setTab] = useState("all");
   if (id) return <OrderDetail s={s} id={id} />;
-  const rows = mine.filter((o) => tab === "all" || o.type === tab || (tab === "request" && false));
+  const rows = mine.filter((o) => tab === "all" || o.type === tab);
   return (
     <div className="wrap" style={{ padding: "32px 0 80px" }}>
-      <div className="hrow"><div><h1>订单</h1><p>个人订购单，可下载明细</p></div>
-        <Btn sm ghost onClick={() => {
-          const header = "单号,类型,状态,款号,尺码,数量,已发,单价,金额,下单时间";
-          const body = mine.flatMap((o) => o.lines.map((l) => [o.id, o.type, statusLabel(o.status), l.pid, l.size, l.qty, l.shipped || 0, l.price, l.qty * l.price, o.created].join(",")));
-          downloadText("我的订购单.csv", [header, ...body].join("\n"), "text/csv");
-        }}>下载订购单</Btn>
+      <div className="hrow"><div><h1>订单</h1><p>个人订购单，可按单或全部下载</p></div>
+        <Btn sm ghost onClick={() => downloadOrderCsv(mine, "我的订购单.csv")}>下载全部订购单</Btn>
       </div>
       <div className="tabs">
         {[["all", "全部"], ["spot", "现货"], ["futures", "期货"], ["ret", "退货"]].map(([k, n]) => (
@@ -517,6 +537,7 @@ function OrdersView({ s, id }) {
           }},
           { key: "created", title: "下单" },
           { key: "amt", title: "金额", render: (r) => Money(Taowo.lineAmount(r.lines)) },
+          { key: "dl", title: "", render: (r) => <button className="linkish" onClick={(e) => { e.stopPropagation(); downloadOrderCsv([r], r.id + ".csv"); }}>下载</button> },
         ]}
         rows={rows}
       />
@@ -546,13 +567,17 @@ function OrderDetail({ s, id }) {
           <p>{statusLabel(o.status)} · {statusLabel(o.payStatus)} · 已发 {shipped} / 未发 {qty - shipped}</p>
         </div>
         <div className="row">
-          <Btn sm ghost onClick={() => dl("csv")}>下载订购单</Btn>
+          <Btn sm ghost onClick={() => downloadOrderCsv([o], o.id + ".csv")}>下载订购单</Btn>
           <Btn sm ghost onClick={() => dl("pdf")}>PDF</Btn>
-          {o.status !== "pending_review" && o.payStatus === "unpaid" && <Btn sm onClick={() => setPay(true)}>支付</Btn>}
+          {o.status === "rejected" && <Btn sm onClick={() => go("/bag")}>回购物袋改后再提</Btn>}
+          {o.status !== "pending_review" && o.status !== "rejected" && o.payStatus === "unpaid" && <Btn sm onClick={() => setPay(true)}>支付</Btn>}
           {o.payStatus === "paying" && <span className="muted">渠道回调中</span>}
           {o.status === "pending_review" && <span className="muted">审核通过后可支付</span>}
         </div>
       </div>
+      {o.status === "rejected" && (
+        <p className="muted" style={{ marginBottom: 16 }}>审核已驳回，明细已退回购物袋。改数量后可重新提交。</p>
+      )}
       <div className="kvs" style={{ marginBottom: 20 }}>
         <i>地址</i><b>{o.address}</b>
         <i>备注</i><b>{o.remark || "—"}</b>
@@ -625,12 +650,11 @@ function AccountView({ s }) {
 
 function HeartView({ s }) {
   const favs = s.favorites.map((id) => s.products.find((p) => p.id === id)).filter(Boolean);
+  const wishes = (s.wishlist || []).filter((w) => !w.dealerId || w.dealerId === s.session.dealerId);
   return (
     <div className="wrap" style={{ padding: "32px 0 80px" }}>
-      <h1 style={{ fontSize: 36, fontWeight: 400, marginBottom: 20 }}>收藏</h1>
-      <div className="plp-grid">{favs.map((p) => <ProductCard key={p.id} p={p} s={s} />)}</div>
-      <h2 style={{ fontSize: 24, margin: "40px 0 12px", fontWeight: 400 }}>心愿单</h2>
-      {s.wishlist.length ? s.wishlist.map((w, i) => {
+      <h1 style={{ fontSize: 36, fontWeight: 400, marginBottom: 20 }}>心愿单</h1>
+      {wishes.length ? wishes.map((w, i) => {
         const p = Taowo.product(w.pid);
         return (
           <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--line)" }}>
@@ -639,6 +663,8 @@ function HeartView({ s }) {
           </div>
         );
       }) : <p className="muted">缺货尺码可加入，到货后站内提醒。</p>}
+      <h2 style={{ fontSize: 24, margin: "40px 0 12px", fontWeight: 400 }}>收藏</h2>
+      <div className="plp-grid">{favs.map((p) => <ProductCard key={p.id} p={p} s={s} />)}</div>
     </div>
   );
 }
@@ -663,7 +689,7 @@ function CompanyView({ s }) {
           <Btn sm onClick={() => Taowo.saveDealer(dealer.id, { address: cert, cert: "已认证" })}>保存企业信息</Btn>
           <section className="section-block">
             <h2>子账号</h2>
-            <DataTable columns={[{ key: "name", title: "姓名" }, { key: "account", title: "账号" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }, { key: "op", title: "", render: (r) => <button onClick={(e) => { e.stopPropagation(); Taowo.toggleUser(r.id); }}>{r.status === "active" ? "停用" : "启用"}</button> }]} rows={subs} />
+            <DataTable columns={[{ key: "name", title: "姓名" }, { key: "account", title: "账号" }, { key: "status", title: "状态", render: (r) => accountStatus(r.status) }, { key: "op", title: "", render: (r) => <button onClick={(e) => { e.stopPropagation(); Taowo.toggleUser(r.id); }}>{r.status === "active" ? "停用" : "启用"}</button> }]} rows={subs} />
             <div className="form-grid">
               <Field label="姓名"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
               <Field label="账号"><input value={form.account} onChange={(e) => setForm({ ...form, account: e.target.value })} /></Field>
@@ -681,22 +707,6 @@ function SimpleList({ title, rows, columns }) {
     <div className="wrap" style={{ padding: "32px 0 80px" }}>
       <h1 style={{ fontSize: 36, fontWeight: 400, marginBottom: 20 }}>{title}</h1>
       <DataTable columns={columns} rows={rows} />
-    </div>
-  );
-}
-
-function RequestView({ s }) {
-  const [form, setForm] = useState({ title: "", detail: "" });
-  const mine = s.requests.filter((r) => r.dealerId === s.session.dealerId);
-  return (
-    <div className="wrap" style={{ padding: "32px 0 80px", maxWidth: 800 }}>
-      <h1 style={{ fontSize: 36, fontWeight: 400 }}>求购</h1>
-      <Field label="缺少或未上架的商品"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-      <Field label="说明"><textarea value={form.detail} onChange={(e) => setForm({ ...form, detail: e.target.value })} /></Field>
-      <Btn onClick={() => Taowo.addRequest(form)}>提交求购单</Btn>
-      <div style={{ marginTop: 32 }}>
-        <DataTable columns={[{ key: "id", title: "单号" }, { key: "title", title: "需求" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }, { key: "reply", title: "回写" }]} rows={mine} />
-      </div>
     </div>
   );
 }
@@ -857,7 +867,7 @@ function MallApp({ s, path, parts, query }) {
   else if (path === "/account") body = <AccountView s={s} />;
   else if (path === "/heart") body = <HeartView s={s} />;
   else if (path === "/company") body = <CompanyView s={s} />;
-  else if (path === "/request") body = <RequestView s={s} />;
+  else if (path === "/request") body = <HeartView s={s} />;
   else if (path === "/returns") body = <ReturnView s={s} />;
   else if (path === "/media") body = <MediaView s={s} />;
   else if (path === "/contracts") body = <SimpleList title="合同" rows={s.contracts.filter((c) => c.dealerId === s.session.dealerId)} columns={[{ key: "id", title: "编号" }, { key: "title", title: "名称" }, { key: "status", title: "状态" }, { key: "from", title: "起" }, { key: "to", title: "止" }, { key: "file", title: "文件", render: (r) => <button onClick={() => Taowo.toast("下载 " + r.file)}>下载</button> }]} />;
