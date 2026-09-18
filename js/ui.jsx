@@ -75,7 +75,7 @@ function Money(n) {
 function statusLabel(s) {
   return ({
     pending_review: "待审核",
-    active: "已生效",
+    active: "待发货",
     partial: "部分发货",
     shipped: "已发货",
     rejected: "已驳回",
@@ -138,6 +138,20 @@ function productThumb(p) {
   return p?.images?.[0] || "";
 }
 
+function groupOrderLines(lines) {
+  const map = {};
+  (lines || []).forEach((l) => {
+    if (!map[l.pid]) map[l.pid] = { pid: l.pid, price: l.price, items: [] };
+    map[l.pid].items.push(l);
+  });
+  return Object.values(map);
+}
+
+function qtyOfSize(lines, size) {
+  const hit = (lines || []).find((l) => l.size === size);
+  return hit ? hit.qty : 0;
+}
+
 function filterProducts(products, { type, fair, q, brand, ip, cat, sub, wave, season, gender }) {
   return products.filter((p) => {
     if (type && p.type !== type) return false;
@@ -150,7 +164,7 @@ function filterProducts(products, { type, fair, q, brand, ip, cat, sub, wave, se
     if (season && p.season !== season) return false;
     if (gender && p.gender !== gender) return false;
     if (q) {
-      const s = (p.id + p.name + p.nameZh).toLowerCase();
+      const s = (p.id + p.name + p.nameZh + (p.brand || "") + (p.ip || "")).toLowerCase();
       if (!s.includes(q.toLowerCase())) return false;
     }
     return true;
@@ -158,5 +172,5 @@ function filterProducts(products, { type, fair, q, brand, ip, cat, sub, wave, se
 }
 
 Object.assign(window, {
-  Photo, Icon, go, useHash, useStore, Btn, Field, Modal, Empty, Money, statusLabel, Toasts, DataTable, Qty, downloadText, productThumb, filterProducts,
+  Photo, Icon, go, useHash, useStore, Btn, Field, Modal, Empty, Money, statusLabel, Toasts, DataTable, Qty, downloadText, productThumb, filterProducts, groupOrderLines, qtyOfSize,
 });

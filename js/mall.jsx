@@ -3,43 +3,59 @@ const { Icon, Photo, go, Btn, Field, Modal, Empty, Money, statusLabel, DataTable
 
 function MallNav({ s, path }) {
   const count = (s.cart || []).reduce((n, c) => n + c.qty, 0);
-  const [q, setQ] = useState("");
-  const mobile = typeof window !== "undefined" && window.innerWidth < 960;
-  const names = (mobile ? s.cms.h5Nav : s.cms.nav) || s.cms.nav || ["现货", "期货", "订货会"];
-  const hrefOf = (name) => (/期货/.test(name) ? "/shop/futures" : /订货/.test(name) ? "/fair" : "/shop/spot");
+  const productMenu = s.cms.productMenu || [
+    { label: "现货", href: "#/shop/spot" },
+    { label: "期货", href: "#/shop/futures" },
+    { label: "订货会", href: "#/fair" },
+  ];
+  const assetMenu = s.cms.assetMenu || [
+    { label: "合同", href: "#/contracts" },
+    { label: "对账单", href: "#/statements" },
+    { label: "企业资料", href: "#/company" },
+  ];
+  const productOn = path.startsWith("/shop") || path.startsWith("/fair") || path.startsWith("/p/");
+  const orderOn = path.startsWith("/orders");
+  const assetOn = ["/contracts", "/statements", "/company"].some((p) => path.startsWith(p));
   return (
     <header className="top">
       <a className="logo" href="#/">TAOWO<span>Order</span></a>
       <nav className="nav">
-        {names.map((n) => {
-          const href = hrefOf(n);
-          return <a key={n} className={path.startsWith(href) || (href === "/fair" && path === "/fair") ? "active" : ""} href={"#" + href}>{n}</a>;
-        })}
+        <div className={"nav-drop" + (productOn ? " active" : "")}>
+          <a href="#/shop/spot" className={productOn ? "active" : ""}>产品</a>
+          <div className="drop">
+            {productMenu.map((m) => <a key={m.href} href={m.href}>{m.label}</a>)}
+          </div>
+        </div>
+        <a className={orderOn ? "active" : ""} href="#/orders">订单</a>
+        <div className={"nav-drop" + (assetOn ? " active" : "")}>
+          <a href="#/contracts" className={assetOn ? "active" : ""}>资产</a>
+          <div className="drop">
+            {assetMenu.map((m) => <a key={m.href} href={m.href}>{m.label}</a>)}
+          </div>
+        </div>
       </nav>
       <div className="tools">
-        <form className="searchbox" onSubmit={(e) => { e.preventDefault(); go("/shop/spot?q=" + encodeURIComponent(q)); }}>
-          <Icon name="search" size={18} />
-          <input placeholder="款号、名称" value={q} onChange={(e) => setQ(e.target.value)} />
-        </form>
-        <button className="iconbtn" onClick={() => go("/heart")} title="收藏"><Icon name="heart" /></button>
+        <button className="iconbtn" onClick={() => go("/heart")} title="心愿单"><Icon name="heart" /></button>
         <button className="iconbtn" onClick={() => go("/bag")} title="购物袋">
           <Icon name="bag" />
           {count > 0 && <span className="badge">{count}</span>}
         </button>
-        <button className="iconbtn" onClick={() => go("/account")} title="账号"><Icon name="user" /></button>
+        <button className="who" onClick={() => go("/account")} title="账号">
+          <Icon name="user" size={18} />
+          <span>{s.session ? s.session.name : "登录"}</span>
+        </button>
       </div>
     </header>
   );
 }
 
 function MallTab({ path }) {
-  const map = { "/": "home", "/shop": "shop", "/fair": "fair", "/bag": "bag", "/account": "me" };
-  const key = path === "/" ? "home" : path.startsWith("/shop") ? "shop" : path.startsWith("/fair") ? "fair" : path.startsWith("/bag") ? "bag" : "me";
+  const key = path === "/" ? "home" : path.startsWith("/shop") || path.startsWith("/fair") || path.startsWith("/p/") ? "shop" : path.startsWith("/orders") ? "orders" : path.startsWith("/bag") ? "bag" : "me";
   return (
     <nav className="bottom">
       <a className={key === "home" ? "on" : ""} href="#/"><Icon name="home" size={18} />首页</a>
-      <a className={key === "shop" ? "on" : ""} href="#/shop/spot"><Icon name="grid" size={18} />订货</a>
-      <a className={key === "fair" ? "on" : ""} href="#/fair"><Icon name="grid" size={18} />专场</a>
+      <a className={key === "shop" ? "on" : ""} href="#/shop/spot"><Icon name="grid" size={18} />产品</a>
+      <a className={key === "orders" ? "on" : ""} href="#/orders"><Icon name="grid" size={18} />订单</a>
       <a className={key === "bag" ? "on" : ""} href="#/bag"><Icon name="bag" size={18} />袋</a>
       <a className={key === "me" ? "on" : ""} href="#/account"><Icon name="user" size={18} />我的</a>
     </nav>
@@ -81,13 +97,11 @@ function ProductCard({ p, s }) {
         )}
       </div>
       <div className="pcard-body">
-        {(p.colors || []).length > 1 && (
-          <div className="swatches">
-            {p.colors.map((c) => <i key={c.name} style={{ background: c.hex }} title={c.name} />)}
-          </div>
-        )}
-        <strong>{productTitle(p)}</strong>
         <b className={can && stock > 0 ? "pcard-price" : "pcard-price sold"}>{label}</b>
+        <span className="pcard-meta">品牌 {p.brand}</span>
+        <span className="pcard-meta">IP {p.ip}</span>
+        <span className="pcard-meta">大类 {p.cat} · 小类 {p.sub}</span>
+        <span className="pcard-meta">波次 {p.wave} · 款号 {p.id}</span>
         {flag ? <span className="pcard-flag">{flag}</span> : null}
       </div>
     </a>
@@ -102,27 +116,21 @@ function HomeView({ s }) {
     return () => clearInterval(t);
   }, [heroes.length]);
   const h = heroes[i];
-  const spot = s.products.filter((p) => p.type === "spot" && p.status === "live");
-  const fair = s.products.filter((p) => p.fair);
   return (
     <div>
       <div className="shop-teams wrap">
         <div className="shop-teams-copy">
-          <b>选分类</b>
-          <a href="#/shop/spot">全部商品</a>
+          <b>分类</b>
         </div>
-        <div className="shop-teams-row">
-          {[
-            { t: "现货", href: "/shop/spot", tone: "#111" },
-            { t: "期货", href: "/shop/futures", tone: "#1f3d2b" },
-            { t: "订货会", href: "/fair", tone: "#8a1c1c" },
-            { t: "鞋履", href: "/shop/spot", tone: "#3949ab" },
-            { t: "服装", href: "/shop/spot", tone: "#6b7280" },
-            { t: "配件", href: "/shop/spot", tone: "#2e3a46" },
-          ].map((c) => (
-            <a className="team-dot" key={c.t} href={"#" + c.href}>
-              <span style={{ background: c.tone }}>{c.t.slice(0, 1)}</span>
-              {c.t}
+        <div className="shop-teams-row cats-3">
+          {(s.cms.categoryNav || [
+            { label: "产品", href: "#/shop/spot" },
+            { label: "订单", href: "#/orders" },
+            { label: "资产", href: "#/contracts" },
+          ]).map((c) => (
+            <a className="team-dot" key={c.label} href={c.href}>
+              <span style={{ background: "#111" }}>{c.label.slice(0, 1)}</span>
+              {c.label}
             </a>
           ))}
         </div>
@@ -136,21 +144,22 @@ function HomeView({ s }) {
         </div>
         <div className="hero-dots">{heroes.map((_, n) => <i key={n} className={n === i ? "on" : ""} />)}</div>
       </section>
-      <a className="fairband" href="#/fair">
-        <img src={s.images.floor} alt="" />
+      <a className="fairband" href={s.cms.banner?.href || "#/fair"}>
+        <img src={s.cms.banner?.img || s.images.floor} alt="" />
         <div className="copy">
-          <h2>SS26 订货会专场</h2>
-          <Btn ghost>现场下单</Btn>
+          <h2>{s.cms.banner?.title || "SS26 订货会专场"}</h2>
+          <Btn ghost>{s.cms.banner?.sub || "现场下单"}</Btn>
         </div>
       </a>
-      <div className="section wrap">
-        <h2>现货速发</h2>
-        <div className="plp-grid">{spot.slice(0, 6).map((p) => <ProductCard key={p.id} p={p} s={s} />)}</div>
-      </div>
-      <div className="section wrap" style={{ paddingBottom: 80 }}>
-        <h2>订货会商品</h2>
-        <div className="plp-grid">{fair.slice(0, 6).map((p) => <ProductCard key={p.id} p={p} s={s} />)}</div>
-      </div>
+      {(s.cms.floors || []).map((floor) => {
+        const list = filterProducts(s.products, floor.query || { type: "spot" }).filter((p) => p.status === "live").slice(0, 6);
+        return (
+          <div className="section wrap" key={floor.id} style={{ paddingBottom: 40 }}>
+            <h2>{floor.title}</h2>
+            <div className="plp-grid">{list.map((p) => <ProductCard key={p.id} p={p} s={s} />)}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -184,8 +193,14 @@ function ShopView({ s, type, fair, query }) {
     const sizes = Array.from(new Set(list.flatMap((p) => p.sizes)));
     const header = ["图片1", "图片2", "款号", "名称", "波次", ...sizes, "合计"].join(",");
     const rows = list.map((p) => [p.images[0], p.images[1] || p.images[0], p.id, p.name, p.wave, ...sizes.map(() => ""), ""].join(","));
-    downloadText("订购模板-" + (type || "fair") + ".csv", [header, ...rows].join("\n"), "text/csv");
-    Taowo.toast("已导出含图片链接、波次、尺码列的模板");
+    downloadText("订购表模板-" + (type || "fair") + ".csv", [header, ...rows].join("\n"), "text/csv");
+    Taowo.toast("已下载订购表模板，填写数量后上传即可写入购物袋");
+  }
+  function onUpload(file) {
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => Taowo.importOrderSheetToCart(String(r.result));
+    r.readAsText(file);
   }
   return (
     <div className="plp wrap">
@@ -201,18 +216,6 @@ function ShopView({ s, type, fair, query }) {
             </div>
           </div>
         )}
-        <label className="plp-sort">
-          <span>排序</span>
-          <select value={sort} onChange={(e) => setSort(e.target.value)}>
-            <option value="hot">热销</option>
-            <option value="new">新品</option>
-            <option value="low">价格从低到高</option>
-            <option value="high">价格从高到低</option>
-          </select>
-        </label>
-        <Field label="款号 / 名称">
-          <input value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} placeholder="TW-1001" />
-        </Field>
         {enabled.includes("品牌") && <FilterGroup open title="品牌" items={dict.brands} value={f.brand} onChange={(v) => toggle("brand", v)} />}
         {enabled.includes("IP") && <FilterGroup open title="系列" items={dict.ips} value={f.ip} onChange={(v) => toggle("ip", v)} />}
         {enabled.includes("大类") && <FilterGroup open title="大类" items={dict.cats} value={f.cat} onChange={(v) => toggle("cat", v)} />}
@@ -220,17 +223,23 @@ function ShopView({ s, type, fair, query }) {
         {enabled.includes("波次") && <FilterGroup title="波次" items={dict.waves} value={f.wave} onChange={(v) => toggle("wave", v)} />}
         {enabled.includes("季节") && <FilterGroup title="季节" items={dict.seasons} value={f.season} onChange={(v) => toggle("season", v)} />}
         {enabled.includes("性别") && <FilterGroup title="性别" items={dict.genders} value={f.gender} onChange={(v) => toggle("gender", v)} />}
-        <div className="plp-tools">
-          <button onClick={exportTpl}>导出订购模板</button>
-          <button onClick={() => go("/import")}>导入 Excel</button>
-        </div>
       </aside>
       <div className="plp-main">
-        <div className="plp-bar">
+        <div className="plp-toolbar">
+          <label className="btn sm ghost">上传订购表
+            <input type="file" accept=".csv,.txt,.xlsx" hidden onChange={(e) => onUpload(e.target.files[0])} />
+          </label>
+          <input className="plp-search" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} placeholder="模糊搜索款号 / 名称 / 品牌" />
+          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+            <option value="hot">默认</option>
+            <option value="low">价格升序</option>
+            <option value="high">价格降序</option>
+            <option value="new">新品</option>
+          </select>
+          <Btn sm ghost onClick={exportTpl}>下载订购表</Btn>
           <span className="plp-countbox">{list.length} 款</span>
-          <span className="plp-range">1 – {list.length} / {list.length}</span>
         </div>
-        {list.length ? <div className="plp-grid">{list.map((p) => <ProductCard key={p.id} p={p} s={s} />)}</div> : <Empty title="没有匹配商品" text="清空筛选，或发起求购。" action={<Btn ghost onClick={() => go("/request")}>求购</Btn>} />}
+        {list.length ? <div className="plp-grid">{list.map((p) => <ProductCard key={p.id} p={p} s={s} />)}</div> : <Empty title="没有匹配商品" text="清空筛选或换一个关键词。" />}
       </div>
     </div>
   );
@@ -250,8 +259,6 @@ function FilterGroup({ title, items, value, onChange, open }) {
 function PdpView({ s, id }) {
   const p = s.products.find((x) => x.id === id);
   const [qty, setQty] = useState({});
-  const [size, setSize] = useState("");
-  const [n, setN] = useState(1);
   const [img, setImg] = useState(0);
   const [buy, setBuy] = useState(false);
   const [open, setOpen] = useState("desc");
@@ -259,98 +266,79 @@ function PdpView({ s, id }) {
   if (!p) return <Empty title="商品不存在" text="返回列表" action={<Btn onClick={() => go("/shop/spot")}>现货</Btn>} />;
   const can = Taowo.canOrder(p);
   const expired = Taowo.isExpired(p);
-  const total = Object.values(qty).reduce((n, v) => n + (Number(v) || 0), 0);
-  const bagQty = total || (size && n ? n : 0);
-  function bagMap() {
-    if (total) return qty;
-    if (!size) return {};
-    return { [size]: n };
+  const bag = {};
+  const wish = {};
+  p.sizes.forEach((sz) => {
+    const n = Number(qty[sz] || 0);
+    if (!n) return;
+    const st = p.stock[sz] || 0;
+    if (st > 0) bag[sz] = Math.min(n, st);
+    if (st <= 0) wish[sz] = n;
+    else if (n > st) wish[sz] = n - st;
+  });
+  const bagQty = Object.values(bag).reduce((n, v) => n + v, 0);
+  const wishQty = Object.values(wish).reduce((n, v) => n + v, 0);
+  function commit() {
+    if (bagQty) Taowo.addToBag(p.id, bag);
+    Object.entries(wish).forEach(([sz, n]) => Taowo.addWish(p.id, sz, n));
+    if (!bagQty && !wishQty) Taowo.toast("请在尺码矩阵填写数量", "err");
   }
   return (
     <div className="pdp-page wrap">
       <div className="crumb">
-        <a href="#/shop/spot">现货</a> / <a href={"#/shop/" + (p.type === "futures" ? "futures" : "spot")}>{p.cat}</a> / {p.id}
+        <a href="#/shop/spot">产品</a> / <a href={"#/shop/" + (p.type === "futures" ? "futures" : "spot")}>{p.cat}</a> / {p.id}
       </div>
       <div className="pdp">
-        <div className="pdp-media">
-          <div className="pdp-thumbs">
+        <div className="pdp-media stacked">
+          <div className="pdp-hero" style={{ background: p.color || "#e8e8e8" }}>
+            <Photo src={p.images[img] || p.images[0]} alt={p.name} color={p.color} />
+          </div>
+          <div className="pdp-thumbs below">
             {p.images.map((src, i) => (
               <button key={i} className={img === i ? "on" : ""} onClick={() => setImg(i)}>
                 <Photo src={src} alt="" color={p.color} />
               </button>
             ))}
           </div>
-          <div className="pdp-hero" style={{ background: p.color || "#e8e8e8" }}>
-            <Photo src={p.images[img] || p.images[0]} alt={p.name} color={p.color} />
-          </div>
         </div>
         <div className="pdp-buy">
           <h1>{productTitle(p)}</h1>
-          <Stars rating={p.rating} reviews={p.reviews} />
+          <div className="muted">品牌 {p.brand} · IP {p.ip} · {p.cat}/{p.sub} · 波次 {p.wave} · {p.id}</div>
           <div className="stockline">{can ? "有货 — " + p.lead : (expired ? "期货已过期，不可订购" : "当前不可订购")}</div>
           <div className="your-price"><span>经销价</span> {Money(p.price)}</div>
           <div className="muted">建议零售 {Money(p.retail)} · {p.warehouse}</div>
-          {(p.colors || []).length > 0 && (
-            <div className="pdp-colors">
-              <span>颜色</span>
-              <div className="swatches lg">
-                {p.colors.map((c) => <i key={c.name} className={c.name === p.colorName ? "on" : ""} style={{ background: c.hex }} title={c.name} />)}
-              </div>
-            </div>
-          )}
-          <div className="size-head"><span>尺码</span><button className="linkish" onClick={() => Taowo.toast("鞋码 36–45 · 服装 XS–XXL")}>尺码表</button></div>
-          <div className="szchips">
+          <div className="size-head"><span>尺码矩阵</span><button className="linkish" onClick={() => Taowo.toast("鞋码 36–45 · 服装 XS–XXL")}>尺码表</button></div>
+          <p className="muted">有货尺码写入购物袋；缺货尺码写入心愿单。</p>
+          <div className="sizegrid">
             {p.sizes.map((sz) => {
               const st = p.stock[sz] || 0;
               return (
-                <button
-                  key={sz}
-                  disabled={!can || st <= 0}
-                  className={"szchip " + (size === sz ? "on" : "") + (st <= 0 ? " off" : "")}
-                  onClick={() => setSize(sz)}
-                >{sz}</button>
+                <div className={"size " + (st <= 0 ? "off" : "")} key={sz}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><b>{sz}</b><span className="muted">{st ? "可订 " + st : "缺货"}</span></div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    disabled={st > 0 && (!can || expired)}
+                    value={qty[sz] || ""}
+                    onChange={(e) => setQty({ ...qty, [sz]: e.target.value.replace(/[^\d]/g, "") })}
+                  />
+                </div>
               );
             })}
           </div>
-          <label className="qty-row">
-            <span>数量</span>
-            <select value={n} onChange={(e) => setN(Number(e.target.value))}>
-              {[1, 2, 3, 4, 5, 6, 8, 10, 12, 24].map((x) => <option key={x} value={x}>{x}</option>)}
-            </select>
-          </label>
-          <details className="multi-size">
-            <summary>一次填多码（批发）</summary>
-            <div className="sizegrid">
-              {p.sizes.map((sz) => {
-                const st = p.stock[sz] || 0;
-                return (
-                  <div className={"size " + (st <= 0 ? "off" : "")} key={sz}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><b>{sz}</b><span className="muted">{st ? "可订 " + st : "缺货"}</span></div>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      disabled={!can || st <= 0}
-                      value={qty[sz] || ""}
-                      onChange={(e) => setQty({ ...qty, [sz]: e.target.value.replace(/[^\d]/g, "") })}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </details>
-          <Btn block disabled={!can || !bagQty} onClick={() => Taowo.addToBag(p.id, bagMap())}>加入购物袋{bagQty ? " · " + bagQty + " 件" : ""}</Btn>
+          <Btn block disabled={!bagQty && !wishQty} onClick={commit}>
+            {bagQty ? "加入购物袋 · " + bagQty + " 件" : ""}{bagQty && wishQty ? "，" : ""}{wishQty ? "心愿单 · " + wishQty + " 件" : ""}{!bagQty && !wishQty ? "填写数量" : ""}
+          </Btn>
           <div style={{ marginTop: 10 }}>
-            <Btn ghost block disabled={!can || !bagQty} onClick={() => setBuy(true)}>立即下单</Btn>
+            <Btn ghost block disabled={!bagQty} onClick={() => setBuy(true)}>立即下单有货尺码</Btn>
           </div>
-          <div className="pdp-assures">授权货盘 · 审核后发货 · 缺货可加入心愿单</div>
+          <div className="pdp-assures">授权货盘 · 审核后发货 · 缺货进心愿单</div>
           <div className="row" style={{ marginTop: 12 }}>
             <Btn ghost sm onClick={() => Taowo.toggleFav(p.id)}>{s.favorites.includes(p.id) ? "已收藏" : "收藏"}</Btn>
-            <Btn ghost sm onClick={() => Taowo.addWish(p.id, size || p.sizes.find((sz) => (p.stock[sz] || 0) <= 0) || p.sizes[0])}>缺货心愿单</Btn>
-            <Btn ghost sm onClick={() => go("/request")}>求购</Btn>
           </div>
           {buy && (
             <Modal title="提交订购单" onClose={() => setBuy(false)} footer={<Btn block onClick={() => {
-              const lines = Object.entries(bagMap()).filter(([, v]) => Number(v) > 0).map(([sz, qn]) => ({ pid: p.id, size: sz, qty: Number(qn), price: p.price }));
+              const lines = Object.entries(bag).map(([sz, qn]) => ({ pid: p.id, size: sz, qty: Number(qn), price: p.price }));
               const o = Taowo.submitOrder({ address: addr, lines, type: p.type, remark: "详情页直接下单" });
               if (o) go("/orders/" + o.id);
             }}>确认提交</Btn>}>
@@ -403,12 +391,12 @@ function BagView({ s }) {
             <Photo src={productThumb(p)} alt={p?.name} color={p?.color} />
             <div>
               <strong>{p?.name}</strong>
-              <div className="muted">{c.pid} · {c.size} · {p?.type === "futures" ? "期货" : "现货"}</div>
-              <div style={{ marginTop: 10 }}><Qty value={c.qty} max={p?.stock[c.size] || c.qty} onChange={(v) => Taowo.setCartQty(c.pid, c.size, v)} /></div>
+              <div className="muted">SKU {c.pid}-{c.size} · {p?.type === "futures" ? "期货" : "现货"}</div>
+              <div style={{ marginTop: 10 }}><Qty value={c.qty} max={Math.max(p?.stock[c.size] || 0, c.qty)} onChange={(v) => Taowo.setCartQty(c.pid, c.size, v)} /></div>
             </div>
-            <div className="right nowrap">
+            <div className="right" style={{ minWidth: 88 }}>
               <div>{Money(c.price * c.qty)}</div>
-              <button className="iconbtn nowrap" onClick={() => Taowo.removeCart(c.pid, c.size)}>删除</button>
+              <button className="linkish" onClick={() => Taowo.removeCart(c.pid, c.size)}>删除</button>
             </div>
           </div>
         );
@@ -501,11 +489,16 @@ function OrdersView({ s, id }) {
   const rows = mine.filter((o) => tab === "all" || o.type === tab || (tab === "request" && false));
   return (
     <div className="wrap" style={{ padding: "32px 0 80px" }}>
-      <div className="hrow"><div><h1>订单</h1><p>现货、预售、求购、退货与交付进度</p></div></div>
+      <div className="hrow"><div><h1>订单</h1><p>个人订购单，可下载明细</p></div>
+        <Btn sm ghost onClick={() => {
+          const header = "单号,类型,状态,款号,尺码,数量,已发,单价,金额,下单时间";
+          const body = mine.flatMap((o) => o.lines.map((l) => [o.id, o.type, statusLabel(o.status), l.pid, l.size, l.qty, l.shipped || 0, l.price, l.qty * l.price, o.created].join(",")));
+          downloadText("我的订购单.csv", [header, ...body].join("\n"), "text/csv");
+        }}>下载订购单</Btn>
+      </div>
       <div className="tabs">
-        {[["all", "全部"], ["spot", "现货"], ["futures", "预售"], ["req", "求购"], ["ret", "退货"]].map(([k, n]) => (
+        {[["all", "全部"], ["spot", "现货"], ["futures", "期货"], ["ret", "退货"]].map(([k, n]) => (
           <button key={k} className={tab === k ? "on" : ""} onClick={() => {
-            if (k === "req") return go("/request");
             if (k === "ret") return go("/returns");
             setTab(k);
           }}>{n}</button>
@@ -515,7 +508,7 @@ function OrdersView({ s, id }) {
         onRow={(r) => go("/orders/" + r.id)}
         columns={[
           { key: "id", title: "单号" },
-          { key: "type", title: "类型", render: (r) => r.type === "futures" ? "预售" : "现货" },
+          { key: "type", title: "类型", render: (r) => r.type === "futures" ? "期货" : "现货" },
           { key: "status", title: "状态", render: (r) => statusLabel(r.status) },
           { key: "ship", title: "已发 / 未发", render: (r) => {
             const a = r.lines.reduce((n, l) => n + (l.shipped || 0), 0);
@@ -553,7 +546,7 @@ function OrderDetail({ s, id }) {
           <p>{statusLabel(o.status)} · {statusLabel(o.payStatus)} · 已发 {shipped} / 未发 {qty - shipped}</p>
         </div>
         <div className="row">
-          <Btn sm ghost onClick={() => dl("csv")}>Excel</Btn>
+          <Btn sm ghost onClick={() => dl("csv")}>下载订购单</Btn>
           <Btn sm ghost onClick={() => dl("pdf")}>PDF</Btn>
           {o.status !== "pending_review" && o.payStatus === "unpaid" && <Btn sm onClick={() => setPay(true)}>支付</Btn>}
           {o.payStatus === "paying" && <span className="muted">渠道回调中</span>}
@@ -606,12 +599,11 @@ function AccountView({ s }) {
   const [password, setPassword] = useState("");
   const items = [
     ["订单中心", "/orders"],
-    ["收藏 / 心愿单", "/heart"],
+    ["心愿单", "/heart"],
     main ? ["企业管理", "/company"] : null,
     ["合同", "/contracts"],
     ["对账单", "/statements"],
     ["素材库", "/media"],
-    ["求购", "/request"],
     ["退货", "/returns"],
     ["导入订购单", "/import"],
     unread ? ["提醒 " + unread, "/notices"] : ["提醒", "/notices"],
@@ -642,7 +634,7 @@ function HeartView({ s }) {
         const p = Taowo.product(w.pid);
         return (
           <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--line)" }}>
-            <div>{p?.name} · {w.size}<div className="muted">{w.note}</div></div>
+            <div>{p?.name} · {w.size} × {w.qty || 1}<div className="muted">{w.note}</div></div>
             <Btn sm ghost onClick={() => go("/p/" + w.pid)}>返回订购</Btn>
           </div>
         );

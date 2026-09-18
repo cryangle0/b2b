@@ -5,7 +5,7 @@ const OpsApp = window.OpsApp;
 function App() {
   const s = useStore();
   const { path, parts, query } = useHash();
-  if (path.startsWith("/ops")) return <OpsApp s={s} path={path} />;
+  if (path.startsWith("/ops")) return <OpsApp s={s} path={path} parts={parts} />;
   return <MallApp s={s} path={path} parts={parts} query={query} />;
 }
 

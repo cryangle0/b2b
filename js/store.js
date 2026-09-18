@@ -1,5 +1,5 @@
 window.Taowo = (function () {
-  const KEY = "taowo-b2b-proto-v4";
+  const KEY = "taowo-b2b-proto-v6";
   const seed = window.TAOWO_SEED;
 
   function clone(v) {
@@ -21,6 +21,8 @@ window.Taowo = (function () {
     s.toasts = [];
     s.ui = { search: "", bagOpen: false };
     s.importPreview = null;
+    s.pendingBags = s.pendingBags || {};
+    s.mediaFolders = s.mediaFolders || [{ id: "F-main", name: "主图" }, { id: "F-detail", name: "细节" }];
     return s;
   }
 
@@ -151,6 +153,18 @@ window.Taowo = (function () {
         time: now(),
         ip: "10.2.1.3",
       });
+      if (isDealer && u.dealerId) {
+        const extra = (state.pendingBags && state.pendingBags[u.dealerId]) || [];
+        if (extra.length) {
+          extra.forEach((item) => {
+            const hit = state.cart.find((c) => c.pid === item.pid && c.size === item.size);
+            if (hit) hit.qty += item.qty;
+            else state.cart.push({ pid: item.pid, size: item.size, qty: item.qty, price: item.price, selected: true });
+          });
+          state.pendingBags[u.dealerId] = [];
+          toast("有驳回订购已退回购物袋，请修改后重新提交");
+        }
+      }
       emit();
       toast("欢迎回来，" + u.name);
       return { ok: true, user: u };
@@ -284,10 +298,18 @@ window.Taowo = (function () {
       if (!o) return;
       if (action === "reject") {
         o.status = "rejected";
-        o.history.push({ t: now(), e: "审核驳回" + (adjust ? "：" + adjust : "") });
+        o.history.push({ t: now(), e: "审核驳回，商品已退回经销商购物袋" + (adjust ? "：" + adjust : "") });
+        state.pendingBags = state.pendingBags || {};
+        const bag = (state.pendingBags[o.dealerId] = state.pendingBags[o.dealerId] || []);
         o.lines.forEach((l) => {
           const p = product(l.pid);
           if (p) p.stock[l.size] = (p.stock[l.size] || 0) + l.qty;
+          bag.push({ pid: l.pid, size: l.size, qty: l.qty, price: l.price });
+          if (state.session && state.session.dealerId === o.dealerId) {
+            const hit = state.cart.find((c) => c.pid === l.pid && c.size === l.size);
+            if (hit) hit.qty += l.qty;
+            else state.cart.push({ pid: l.pid, size: l.size, qty: l.qty, price: l.price, selected: true });
+          }
         });
       } else {
         if (adjust && adjust.lines) o.lines = adjust.lines;
@@ -354,6 +376,19 @@ window.Taowo = (function () {
     ship(orderId, payload) {
       const o = state.orders.find((x) => x.id === orderId);
       if (!o) return;
+      if (!(payload.tracking || "").trim()) {
+        toast("发货必须填写发货单号", "err");
+        return;
+      }
+      const over = (payload.lines || []).find((l) => {
+        const line = o.lines.find((x) => x.pid === l.pid && x.size === l.size);
+        const remain = line ? line.qty - (line.shipped || 0) : 0;
+        return !line || l.qty > remain;
+      });
+      if (over) {
+        toast(over.pid + " " + over.size + " 超出可发数量", "err");
+        return;
+      }
       const id = "SH-" + String(Date.now()).slice(-4);
       const ship = {
         id,
@@ -488,11 +523,20 @@ window.Taowo = (function () {
         const p = product(id);
         if (!p) return;
         Object.assign(p, patch);
+        const action = patch.orderable === false ? "不可订购" : patch.status === "off" ? "下架" : "上架";
         state.productLogs.unshift({
           t: now(),
           user: state.session.name,
-          action: patch.orderable === false ? "不可订购" : patch.status === "off" ? "下架" : "上架",
+          action,
           target: id,
+        });
+        state.logs.unshift({
+          id: Date.now() + Math.random(),
+          user: state.session.name,
+          type: action === "下架" ? "商品下架" : action === "上架" ? "商品上架" : "修改",
+          result: id + " " + action,
+          time: now(),
+          ip: "10.2.1.3",
         });
       });
       emit();
@@ -504,6 +548,7 @@ window.Taowo = (function () {
       rows.forEach((r) => {
         const p = product(r.pid);
         if (!p) return;
+        if (r.warehouse) p.warehouse = r.warehouse;
         if (p.stock[r.size] == null) p.stock[r.size] = 0;
         const before = p.stock[r.size] || 0;
         p.stock[r.size] = Number(r.qty);
@@ -525,7 +570,7 @@ window.Taowo = (function () {
       emit();
       toast("已写入 " + n + " 条可订量" + (hits.length ? "，并通知心愿单经销商" : ""));
     },
-    matchImages(files) {
+    matchImages(files, folderId) {
       const matched = [];
       files.forEach((f) => {
         const pid = (f.name.match(/TW-\d+/) || [])[0];
@@ -540,9 +585,10 @@ window.Taowo = (function () {
             kind: /d\d|detail/i.test(f.name) ? "细节" : "主图",
             name: f.name,
             src: f.url || p.images[0],
+            folderId: folderId || (state.mediaFolders && state.mediaFolders[0]?.id) || "",
           });
-          matched.push({ name: f.name, pid, ok: true });
-        } else matched.push({ name: f.name, pid: "—", ok: false });
+          matched.push({ name: f.name, pid, ok: true, src: f.url || p.images[0] });
+        } else matched.push({ name: f.name, pid: "—", ok: false, src: f.url || "" });
       });
       emit();
       return matched;
@@ -552,11 +598,21 @@ window.Taowo = (function () {
       else state.favorites.push(pid);
       emit();
     },
-    addWish(pid, size) {
-      if (!state.wishlist.some((w) => w.pid === pid && w.size === size)) {
-        state.wishlist.push({ pid, size, note: "到货提醒" });
-        toast("已加入心愿单，到货后通知");
+    addWish(pid, size, qty) {
+      qty = Number(qty) || 1;
+      const hit = state.wishlist.find((w) => w.pid === pid && w.size === size && w.dealerId === state.session?.dealerId);
+      if (hit) hit.qty = (hit.qty || 1) + qty;
+      else {
+        state.wishlist.push({
+          pid,
+          size,
+          qty,
+          note: "缺货心愿单",
+          dealerId: state.session?.dealerId,
+          time: now(),
+        });
       }
+      toast("已加入缺货心愿单");
       emit();
     },
     restockNotice(pid) {
@@ -870,6 +926,187 @@ window.Taowo = (function () {
         else a.fail += 1;
       }
       emit();
+    },
+    bindUserDealer(userId, dealerId) {
+      const u = state.users.find((x) => x.id === userId);
+      const d = state.dealers.find((x) => x.id === dealerId);
+      if (!u) return toast("账号不存在", "err");
+      if (!d) return toast("经销商档案不存在", "err");
+      u.dealerId = dealerId;
+      u.org = d.name;
+      emit();
+      toast("已绑定 " + d.name);
+    },
+    createWarehouse(form) {
+      const id = "WH-" + String(Date.now()).slice(-4);
+      state.warehouses.unshift({
+        id,
+        name: form.name,
+        city: form.city || "",
+        skus: 0,
+        sync: form.sync || "手动",
+      });
+      emit();
+      toast("仓库已创建");
+    },
+    importOrderSheetToCart(text) {
+      const preview = api.parseImport(text);
+      if (!preview.rows.length) {
+        toast(preview.errors[0] || "订购表没有有效行", "err");
+        return preview;
+      }
+      preview.rows.forEach((r) => {
+        const hit = state.cart.find((c) => c.pid === r.pid && c.size === r.size);
+        if (hit) hit.qty += r.qty;
+        else state.cart.push({ pid: r.pid, size: r.size, qty: r.qty, price: r.price, selected: true });
+      });
+      emit();
+      toast("订购表中的数量已写入购物袋");
+      return preview;
+    },
+    updateOrderLines(orderId, lines) {
+      const o = state.orders.find((x) => x.id === orderId);
+      if (!o || o.status !== "pending_review") {
+        toast("仅待审核订购单可改明细", "err");
+        return;
+      }
+      const old = o.lines;
+      old.forEach((l) => {
+        const p = product(l.pid);
+        if (p) p.stock[l.size] = (p.stock[l.size] || 0) + l.qty;
+      });
+      for (const l of lines) {
+        const p = product(l.pid);
+        if (!p || l.qty > (p.stock[l.size] || 0)) {
+          old.forEach((x) => {
+            const q = product(x.pid);
+            if (q) q.stock[x.size] = (q.stock[x.size] || 0) - x.qty;
+          });
+          toast((l.pid || "") + " 可订量不足", "err");
+          return;
+        }
+      }
+      lines.forEach((l) => {
+        const p = product(l.pid);
+        p.stock[l.size] = (p.stock[l.size] || 0) - l.qty;
+      });
+      o.lines = lines.map((l) => ({ pid: l.pid, size: l.size, qty: Number(l.qty), price: l.price, shipped: 0 }));
+      o.history.push({ t: now(), e: "平台修改订购明细" });
+      emit();
+      toast("订购单已更新");
+    },
+    shipFromCsv(orderId, text, express, tracking) {
+      const o = state.orders.find((x) => x.id === orderId);
+      if (!o) return;
+      if (!["active", "partial"].includes(o.status)) {
+        toast("仅待发货/部分发货可开单", "err");
+        return;
+      }
+      if (!(tracking || "").trim()) {
+        toast("发货必须填写发货单号", "err");
+        return;
+      }
+      const lines = [];
+      const rows = text.trim().split(/\r?\n/).filter(Boolean);
+      const header = (rows.shift() || "").split(/[,	]/).map((s) => s.trim());
+      const iPid = header.findIndex((h) => /款号/.test(h));
+      const iSize = header.findIndex((h) => /尺码/.test(h));
+      const iQty = header.findIndex((h) => /本次|发货数|数量/.test(h));
+      if (iPid < 0 || iSize < 0 || iQty < 0) {
+        toast("模板需含：款号、尺码、本次发货", "err");
+        return;
+      }
+      for (const row of rows) {
+        const c = row.split(/[,	]/);
+        const pid = (c[iPid] || "").trim();
+        const size = (c[iSize] || "").trim();
+        const qty = Number(c[iQty] || 0);
+        if (!pid || !qty) continue;
+        const line = o.lines.find((x) => x.pid === pid && x.size === size);
+        if (!line) {
+          toast(pid + " " + size + " 不在本订单可发范围内", "err");
+          return;
+        }
+        const remain = line.qty - (line.shipped || 0);
+        if (qty > remain) {
+          toast(pid + " " + size + " 发货 " + qty + " 超出可发 " + remain, "err");
+          return;
+        }
+        lines.push({ pid, size, qty });
+      }
+      if (!lines.length) {
+        toast("没有有效发货行", "err");
+        return;
+      }
+      api.ship(orderId, { express: express || "顺丰", tracking: tracking.trim(), date: state.today, lines });
+    },
+    createMediaFolder(name) {
+      state.mediaFolders = state.mediaFolders || [];
+      state.mediaFolders.push({ id: "F-" + Date.now(), name: name || "未命名" });
+      emit();
+      toast("文件夹已创建");
+    },
+    deleteMedia(ids) {
+      state.media = state.media.filter((m) => !ids.includes(m.id));
+      emit();
+      toast("已删除 " + ids.length + " 张图片");
+    },
+    moveMedia(ids, folderId) {
+      (state.media || []).forEach((m) => {
+        if (ids.includes(m.id)) m.folderId = folderId;
+      });
+      emit();
+    },
+    shipAll(orderId, express, tracking) {
+      const o = state.orders.find((x) => x.id === orderId);
+      if (!o) return;
+      const lines = o.lines
+        .map((l) => ({ pid: l.pid, size: l.size, qty: l.qty - (l.shipped || 0) }))
+        .filter((x) => x.qty > 0);
+      if (!lines.length) {
+        toast("没有可发数量", "err");
+        return;
+      }
+      api.ship(orderId, { express: express || "顺丰", tracking, date: state.today, lines });
+    },
+    addOrderLine(orderId, pid, size, qty) {
+      const o = state.orders.find((x) => x.id === orderId);
+      if (!o || o.status !== "pending_review") {
+        toast("仅待审核订购单可增款", "err");
+        return;
+      }
+      const p = product(pid);
+      qty = Number(qty) || 0;
+      if (!p || !size || qty <= 0) {
+        toast("请填写存在的款号、尺码和数量", "err");
+        return;
+      }
+      if (qty > (p.stock[size] || 0)) {
+        toast(pid + " " + size + " 可订量不足", "err");
+        return;
+      }
+      p.stock[size] -= qty;
+      const hit = o.lines.find((l) => l.pid === pid && l.size === size);
+      if (hit) hit.qty += qty;
+      else o.lines.push({ pid, size, qty, price: p.price, shipped: 0 });
+      o.history.push({ t: now(), e: "增款 " + pid + " " + size + " × " + qty });
+      emit();
+      toast("已增加明细");
+    },
+    removeOrderPid(orderId, pid) {
+      const o = state.orders.find((x) => x.id === orderId);
+      if (!o || o.status !== "pending_review") {
+        toast("仅待审核订购单可删款", "err");
+        return;
+      }
+      o.lines.filter((l) => l.pid === pid).forEach((l) => {
+        const p = product(l.pid);
+        if (p) p.stock[l.size] = (p.stock[l.size] || 0) + l.qty;
+      });
+      o.lines = o.lines.filter((l) => l.pid !== pid);
+      o.history.push({ t: now(), e: "删款 " + pid });
+      emit();
+      toast("已删除该款");
     },
     lineAmount,
     applyPromo,

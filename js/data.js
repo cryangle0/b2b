@@ -301,6 +301,7 @@ window.TAOWO_SEED = (function () {
       { id: "u-ops", name: "许南", account: "ops", password: "123456", role: "ops_merch", org: "商品组", status: "active" },
       { id: "u-dealer", name: "陈屿", account: "dealer", password: "123456", role: "dealer_main", org: "上海北区贸易", dealerId: "D-10086", status: "active" },
       { id: "u-sub", name: "吴岚", account: "sub", password: "123456", role: "dealer_sub", org: "上海北区贸易", dealerId: "D-10086", status: "active" },
+      { id: "u-unbound", name: "待绑定", account: "unbind", password: "123456", role: "dealer_main", org: "—", dealerId: "", status: "active" },
     ],
     orgs: [
       { id: "O1", name: "总部运营", parent: "—", people: 8 },
@@ -412,7 +413,7 @@ window.TAOWO_SEED = (function () {
       seasons: ["SS26", "FW26", "SS25"],
       genders: ["中性", "男", "女"],
       waves: ["01", "02", "03"],
-      orderStatus: ["待审核", "已生效", "部分发货", "已发货", "已驳回", "已关闭"],
+      orderStatus: ["待审核", "待发货", "部分发货", "已发货", "已驳回", "已关闭"],
       payMethods: ["微信支付", "支付宝", "对公转账"],
       filters: ["品牌", "IP", "大类", "小类", "波次", "款号", "季节", "性别"],
       attachLimit: "单文件 20MB，ZIP 内图片 jpg/png，视频 mp4",
@@ -420,8 +421,23 @@ window.TAOWO_SEED = (function () {
       specs: ["36–45 鞋码", "XS–XXL 服装", "Freesize"],
     },
     cms: {
-      nav: ["现货", "期货", "订货会"],
-      h5Nav: ["现货", "期货", "订货会"],
+      nav: ["产品", "订单", "资产"],
+      h5Nav: ["产品", "订单", "资产"],
+      productMenu: [
+        { label: "现货", href: "#/shop/spot" },
+        { label: "期货", href: "#/shop/futures" },
+        { label: "订货会", href: "#/fair" },
+      ],
+      assetMenu: [
+        { label: "合同", href: "#/contracts" },
+        { label: "对账单", href: "#/statements" },
+        { label: "企业资料", href: "#/company" },
+      ],
+      categoryNav: [
+        { label: "产品", href: "#/shop/spot" },
+        { label: "订单", href: "#/orders" },
+        { label: "资产", href: "#/contracts" },
+      ],
       hero: [
         { title: "SS26 订货会", sub: "现场下单 · 手机同样可用", img: img.fair, href: "#/fair" },
         { title: "气织竞速", sub: "现货 3–5 天交付", img: img.runner, href: "#/shop/spot" },
@@ -431,6 +447,7 @@ window.TAOWO_SEED = (function () {
         { id: "f1", title: "现货速发", query: { type: "spot" } },
         { id: "f2", title: "订货会专场", query: { fair: true } },
       ],
+      banner: { title: "SS26 订货会专场", sub: "现场下单", href: "#/fair", img: img.floor },
       published: true,
       preview: false,
     },
@@ -494,6 +511,44 @@ window.TAOWO_SEED = (function () {
           { pid: "TW-1004", size: "L", qty: 20, price: 88, shipped: 0 },
         ],
         history: [{ t: "2026-09-18 09:12", e: "经销商提交订购单" }],
+      },
+      {
+        id: "SO-260917-02",
+        dealerId: "D-10086",
+        type: "spot",
+        status: "active",
+        payStatus: "paid",
+        payMethod: "对公转账",
+        created: "2026-09-17 11:08",
+        address: "上海市静安区南京西路 1266 号 8F 仓库",
+        remark: "待发货演示",
+        lines: [
+          { pid: "TW-1002", size: "40", qty: 8, price: 392, shipped: 0 },
+          { pid: "TW-1002", size: "41", qty: 6, price: 392, shipped: 0 },
+        ],
+        history: [
+          { t: "2026-09-17 11:08", e: "经销商提交订购单" },
+          { t: "2026-09-17 16:20", e: "审核通过，订单生效" },
+          { t: "2026-09-17 16:40", e: "对公付款确认" },
+        ],
+      },
+      {
+        id: "SO-260915-03",
+        dealerId: "D-10086",
+        type: "spot",
+        status: "rejected",
+        payStatus: "unpaid",
+        payMethod: "",
+        created: "2026-09-15 15:02",
+        address: "上海市静安区南京西路 1266 号 8F 仓库",
+        remark: "数量需调整",
+        lines: [
+          { pid: "TW-1003", size: "M", qty: 4, price: 248, shipped: 0 },
+        ],
+        history: [
+          { t: "2026-09-15 15:02", e: "经销商提交订购单" },
+          { t: "2026-09-15 18:10", e: "审核驳回，商品已退回经销商购物袋" },
+        ],
       },
       {
         id: "SO-260910-08",
@@ -611,7 +666,7 @@ window.TAOWO_SEED = (function () {
       },
     ],
     favorites: ["TW-1001", "TW-2001"],
-    wishlist: [{ pid: "TW-1005", size: "M", note: "到货提醒" }],
+    wishlist: [{ pid: "TW-1005", size: "M", qty: 2, note: "到货提醒", dealerId: "D-10086", time: "2026-09-17 18:00" }],
     notices: [
       { id: "N1", title: "Trail Apex 41 码已补货", time: "2026-09-18 07:40", read: false, href: "#/p/TW-2001" },
       { id: "N2", title: "订购单 SO-260918-01 待品牌审核", time: "2026-09-18 09:12", read: false, href: "#/orders/SO-260918-01" },
@@ -619,19 +674,28 @@ window.TAOWO_SEED = (function () {
     logs: [
       { id: 1, user: "林澄", type: "登录", result: "成功", time: "2026-09-18 08:01", ip: "10.2.1.8" },
       { id: 2, user: "许南", type: "商品上架", result: "TW-1001 上架", time: "2026-09-18 08:20", ip: "10.2.1.11" },
+      { id: 4, user: "许南", type: "商品下架", result: "TW-1006 下架", time: "2026-09-18 08:22", ip: "10.2.1.11" },
       { id: 3, user: "周启", type: "审核", result: "SO-260910-08 通过", time: "2026-09-10 18:01", ip: "10.2.1.19" },
     ],
     productLogs: [
       { t: "2026-09-18 08:20", user: "许南", action: "上架", target: "TW-1001" },
+      { t: "2026-09-18 08:22", user: "许南", action: "下架", target: "TW-1006" },
       { t: "2026-09-12 13:10", user: "许南", action: "设为不可订购", target: "TW-1006" },
       { t: "2026-09-10 09:00", user: "许南", action: "期货有效期", target: "TW-2002 → 2026-08-31" },
     ],
+    mediaFolders: [
+      { id: "F-main", name: "主图" },
+      { id: "F-detail", name: "细节" },
+    ],
+    pendingBags: {
+      "D-10086": [{ pid: "TW-1003", size: "M", qty: 4, price: 248 }],
+    },
     media: [
-      { id: "MD1", pid: "TW-1001", year: 2026, kind: "主图", name: "TW-1001_main.jpg", src: img.runner },
-      { id: "MD2", pid: "TW-1001", year: 2026, kind: "细节", name: "TW-1001_d01.jpg", src: img.white },
-      { id: "MD3", pid: "TW-1001", year: 2026, kind: "视频", name: "TW-1001.mp4", src: img.runner },
-      { id: "MD4", pid: "TW-2001", year: 2026, kind: "主图", name: "TW-2001_main.jpg", src: img.trail },
-      { id: "MD5", pid: "TW-1003", year: 2026, kind: "主图", name: "TW-1003_main.jpg", src: img.fleece },
+      { id: "MD1", pid: "TW-1001", year: 2026, kind: "主图", name: "TW-1001_main.jpg", src: img.runner, folderId: "F-main" },
+      { id: "MD2", pid: "TW-1001", year: 2026, kind: "细节", name: "TW-1001_d01.jpg", src: img.white, folderId: "F-detail" },
+      { id: "MD3", pid: "TW-1001", year: 2026, kind: "视频", name: "TW-1001.mp4", src: img.runner, folderId: "F-main" },
+      { id: "MD4", pid: "TW-2001", year: 2026, kind: "主图", name: "TW-2001_main.jpg", src: img.trail, folderId: "F-main" },
+      { id: "MD5", pid: "TW-1003", year: 2026, kind: "主图", name: "TW-1003_main.jpg", src: img.fleece, folderId: "F-main" },
     ],
     apis: [
       { id: "8.1", name: "经销商及主数据", method: "GET/PUT", path: "/open/v1/dealers", last: "2026-09-18 08:12", ok: 128, fail: 0 },
