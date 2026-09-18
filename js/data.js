@@ -403,9 +403,12 @@ window.TAOVO_SEED = (function () {
       payMethods: ["微信支付", "支付宝", "对公转账"],
       filters: ["品牌", "IP", "大类", "小类", "波次", "款号", "季节", "性别"],
       attachLimit: "单文件 20MB，ZIP 内图片 jpg/png，视频 mp4",
+      leads: ["现货 3 天", "现货 3–5 天", "现货 5–7 天", "期货 45 天", "期货 60 天"],
+      specs: ["36–45 鞋码", "XS–XXL 服装", "Freesize"],
     },
     cms: {
       nav: ["现货", "期货", "订货会"],
+      h5Nav: ["现货", "期货", "订货会"],
       hero: [
         { title: "SS26 订货会", sub: "现场下单 · 手机同样可用", img: img.fair, href: "#/fair" },
         { title: "气织竞速", sub: "现货 3–5 天交付", img: img.runner, href: "#/shop/spot" },

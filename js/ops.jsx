@@ -68,19 +68,24 @@ function CmsView({ s }) {
     <div>
       <div className="hrow"><div><h1>装修 · {device}</h1><p>PC 与 H5 共用模块，可分别预览后发布</p></div>
         <div className="row">
-          <Btn sm ghost onClick={() => setDevice(device === "PC" ? "H5" : "PC")}>切到 {device === "PC" ? "H5" : "PC"}</Btn>
+          <Btn sm ghost onClick={() => {
+            const next = device === "PC" ? "H5" : "PC";
+            setDevice(next);
+            setNav(((next === "H5" ? s.cms.h5Nav : s.cms.nav) || s.cms.nav).join(" / "));
+          }}>切到 {device === "PC" ? "H5" : "PC"}</Btn>
           <Btn sm ghost onClick={() => go("/")}>预览商城</Btn>
           <Btn sm onClick={() => {
             const hero = s.cms.hero.slice();
             hero[0] = { ...hero[0], title, sub };
-            Taovo.saveCms({ nav: nav.split(/[\/,，]/).map((x) => x.trim()).filter(Boolean), hero });
+            const parts = nav.split(/[\/,，]/).map((x) => x.trim()).filter(Boolean);
+            Taovo.saveCms(device === "H5" ? { h5Nav: parts, hero } : { nav: parts, hero });
           }}>发布</Btn>
         </div>
       </div>
       <Field label={device + " 导航"}><input value={nav} onChange={(e) => setNav(e.target.value)} /></Field>
       <Field label="首屏标题"><input value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
       <Field label="首屏说明"><input value={sub} onChange={(e) => setSub(e.target.value)} /></Field>
-      <p className="muted">发布后 PC / H5 读取同一生效配置。H5 为响应式，订货会现场可用手机下单。</p>
+      <p className="muted">PC / H5 导航可分别发布；商城顶栏读取生效配置。H5 为响应式，订货会现场可用手机下单。</p>
     </div>
   );
 }
@@ -130,18 +135,23 @@ function AccountsOps({ s }) {
   const [dealerId, setDealerId] = useState(s.dealers[0]?.id);
   const [account, setAccount] = useState("");
   const [name, setName] = useState("");
-  const users = s.users.filter((u) => u.dealerId);
+  const [tab, setTab] = useState("main");
+  const users = s.users.filter((u) => u.dealerId && (tab === "main" ? u.role === "dealer_main" : u.role === "dealer_sub"));
   return (
     <div>
-      <div className="hrow"><div><h1>经销商账号</h1><p>创建商城登录账号并手动绑定档案</p></div></div>
-      <DataTable columns={[{ key: "account", title: "账号" }, { key: "name", title: "姓名" }, { key: "role", title: "角色" }, { key: "dealerId", title: "档案" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }]} rows={users} />
+      <div className="hrow"><div><h1>经销商账号</h1><p>主账号绑定档案；平台也可查看并创建企业子账号</p></div></div>
+      <div className="tabs">
+        <button className={tab === "main" ? "on" : ""} onClick={() => setTab("main")}>主账号</button>
+        <button className={tab === "sub" ? "on" : ""} onClick={() => setTab("sub")}>子账号</button>
+      </div>
+      <DataTable columns={[{ key: "account", title: "账号" }, { key: "name", title: "姓名" }, { key: "role", title: "角色" }, { key: "dealerId", title: "档案" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }, { key: "op", title: "", render: (r) => <button onClick={() => Taovo.resetPassword(r.id)}>重置密码</button> }]} rows={users} />
       <div className="row" style={{ marginTop: 20, alignItems: "end" }}>
         <Field label="档案">
           <select value={dealerId} onChange={(e) => setDealerId(e.target.value)}>{s.dealers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
         </Field>
         <Field label="姓名"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
         <Field label="账号"><input value={account} onChange={(e) => setAccount(e.target.value)} /></Field>
-        <Btn sm onClick={() => Taovo.bindAccount(dealerId, account, name)}>创建并绑定</Btn>
+        <Btn sm onClick={() => tab === "sub" ? Taovo.bindSub(dealerId, name, account) : Taovo.bindAccount(dealerId, account, name)}>{tab === "sub" ? "创建子账号" : "创建并绑定"}</Btn>
       </div>
     </div>
   );
@@ -149,13 +159,13 @@ function AccountsOps({ s }) {
 
 function MasterView({ s }) {
   const dict = s.dictionaries;
-  const keys = [["brands", "品牌"], ["ips", "IP"], ["cats", "大类"], ["subs", "小类"], ["series", "系列"], ["seasons", "季节"], ["genders", "性别"], ["waves", "波次"]];
+  const keys = [["brands", "品牌"], ["ips", "IP"], ["cats", "大类"], ["subs", "小类"], ["series", "系列"], ["seasons", "季节"], ["genders", "性别"], ["waves", "波次"], ["leads", "交期"], ["specs", "规格"]];
   return (
     <div>
       <div className="hrow"><div><h1>商品主数据</h1><p>品牌、属性、规格、分类、系列、交期、季节、性别、波次</p></div></div>
       {keys.map(([k, n]) => (
         <Field key={k} label={n}>
-          <input defaultValue={dict[k].join("、")} onBlur={(e) => Taovo.saveDict(k, e.target.value.split(/[、,，]/).map((x) => x.trim()).filter(Boolean))} />
+          <input defaultValue={(dict[k] || []).join("、")} onBlur={(e) => Taovo.saveDict(k, e.target.value.split(/[、,，]/).map((x) => x.trim()).filter(Boolean))} />
         </Field>
       ))}
     </div>
@@ -165,7 +175,9 @@ function MasterView({ s }) {
 function ProductsOps({ s }) {
   const [tab, setTab] = useState("spot");
   const [edit, setEdit] = useState(null);
-  const [csv, setCsv] = useState("款号,名称,年份,季节,品牌,大类,小类,性别,波次,价格,交期,期货有效期\nTW-3010,Rain Shell,2026,FW26,Studio,服装,外套,中性,03,520,期货 40 天,2026-12-31");
+  const [csv, setCsv] = useState("款号,名称,年份,季节,品牌,大类,小类,性别,波次,价格,交期,期货有效期\nTW-1003,Studio Fleece,2026,FW26,Studio,服装,上衣,中性,02,248,期货 45 天,2026-12-31");
+  const [validTo, setValidTo] = useState("2026-12-31");
+  const [fromId, setFromId] = useState(s.products.find((p) => p.type === "spot")?.id || "");
   const rows = s.products.filter((p) => p.type === (tab === "futures" ? "futures" : "spot"));
   return (
     <div>
@@ -193,6 +205,13 @@ function ProductsOps({ s }) {
           r.readAsText(f);
         }} />
         <Btn sm onClick={() => Taovo.importProducts(csv)}>导入商品</Btn>
+        <div className="row" style={{ marginTop: 12, alignItems: "end" }}>
+          <Field label="从现货创建预售">
+            <select value={fromId} onChange={(e) => setFromId(e.target.value)}>{s.products.filter((p) => p.type === "spot").map((p) => <option key={p.id} value={p.id}>{p.id} {p.name}</option>)}</select>
+          </Field>
+          <Field label="有效期至"><input value={validTo} onChange={(e) => setValidTo(e.target.value)} /></Field>
+          <Btn sm onClick={() => Taovo.createFuturesFromSpot(fromId, validTo, "期货 45 天")}>生成预售</Btn>
+        </div>
       </details>
       <div className="tabs">
         <button className={tab === "spot" ? "on" : ""} onClick={() => setTab("spot")}>现货</button>
@@ -252,8 +271,15 @@ function ImageOps({ s }) {
   return (
     <div>
       <div className="hrow"><div><h1>图片匹配</h1><p>批量选择或 ZIP，按文件名自动匹配款号，需含主图 + 细节图</p></div></div>
-      <input type="file" multiple onChange={(e) => {
-        const files = Array.from(e.target.files || []).map((f) => ({ name: f.name, url: URL.createObjectURL(f) }));
+      <input type="file" multiple accept=".jpg,.jpeg,.png,.zip,image/*" onChange={(e) => {
+        const raw = Array.from(e.target.files || []);
+        const files = raw.flatMap((f) => {
+          if (/\.zip$/i.test(f.name)) {
+            Taovo.toast("已解析 ZIP，按命名规则展开主图/细节图");
+            return [{ name: "TW-1002_main.jpg" }, { name: "TW-1002_d01.jpg" }];
+          }
+          return [{ name: f.name, url: URL.createObjectURL(f) }];
+        });
         setResult(Taovo.matchImages(files.length ? files : [{ name: "TW-1002_main.jpg" }, { name: "TW-1002_d01.jpg" }, { name: "unknown.png" }]));
       }} />
       <div className="row" style={{ margin: "12px 0" }}>
@@ -300,7 +326,12 @@ function ReviewOps({ s }) {
   const [cur, setCur] = useState(s.orders.find((o) => o.status === "pending_review") || s.orders[0]);
   return (
     <div>
-      <div className="hrow"><div><h1>订购单审核</h1><p>品牌方审核价格与数量，通过后生效，可驳回或调整</p></div></div>
+      <div className="hrow"><div><h1>订购单审核</h1><p>品牌方审核价格与数量，通过后生效，可驳回或调整；通过后自动关联合同</p></div>
+        <Btn sm ghost onClick={() => {
+          const rows = s.orders.filter((o) => o.type !== "erp");
+          downloadText("B2B订单.csv", "单号,类型,状态,经销商,金额,时间\n" + rows.map((o) => [o.id, o.type, o.status, o.dealerId, Taovo.lineAmount(o.lines), o.created].join(",")).join("\n"), "text/csv");
+        }}>导出订单</Btn>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 24 }}>
         <div>
           {s.orders.filter((o) => o.type !== "erp").map((o) => (
@@ -444,6 +475,8 @@ function PayOps({ s }) {
 
 function ContractOps({ s }) {
   const [title, setTitle] = useState("新合同");
+  const [cid, setCid] = useState(s.contracts[0]?.id || "");
+  const [oid, setOid] = useState(s.orders.find((o) => o.type !== "erp")?.id || "");
   return (
     <div>
       <div className="hrow"><div><h1>合同</h1><p>维护合同及与订单的关联</p></div></div>
@@ -451,6 +484,11 @@ function ContractOps({ s }) {
       <div className="row" style={{ marginTop: 16 }}>
         <Field label="名称"><input value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
         <Btn sm onClick={() => Taovo.saveContract({ id: "CT-" + Date.now().toString().slice(-4), dealerId: "D-10086", title, orders: [], status: "草稿", from: s.today, to: "2026-12-31", file: "draft.pdf" })}>新建</Btn>
+      </div>
+      <div className="row" style={{ marginTop: 12 }}>
+        <Field label="合同"><select value={cid} onChange={(e) => setCid(e.target.value)}>{s.contracts.map((c) => <option key={c.id}>{c.id}</option>)}</select></Field>
+        <Field label="订单"><select value={oid} onChange={(e) => setOid(e.target.value)}>{s.orders.filter((o) => o.type !== "erp").map((o) => <option key={o.id}>{o.id}</option>)}</select></Field>
+        <Btn sm onClick={() => Taovo.linkContract(cid, oid)}>关联</Btn>
       </div>
     </div>
   );
@@ -485,26 +523,34 @@ function CampaignOps({ s }) {
 }
 
 function ReportOps({ s }) {
-  const byProduct = {};
-  s.orders.filter((o) => o.type !== "erp" && o.status !== "rejected").forEach((o) => {
+  const [dim, setDim] = useState("product");
+  const orders = s.orders.filter((o) => o.type !== "erp" && o.status !== "rejected");
+  const bag = {};
+  orders.forEach((o) => {
     o.lines.forEach((l) => {
-      byProduct[l.pid] = (byProduct[l.pid] || 0) + l.qty;
+      const p = Taovo.product(l.pid);
+      const key = dim === "product" ? l.pid : dim === "dealer" ? o.dealerId : dim === "wave" ? (p?.wave || "—") : l.size;
+      const name = dim === "product" ? p?.name : dim === "dealer" ? o.dealerId : dim === "wave" ? (p?.wave || "—") : l.size;
+      bag[key] = bag[key] || { id: key, name, qty: 0 };
+      bag[key].qty += l.qty;
     });
   });
-  const rows = Object.entries(byProduct).map(([pid, qty]) => {
-    const p = Taovo.product(pid);
-    return { id: pid, name: p?.name, wave: p?.wave, qty, dealer: "多客户" };
-  });
+  const rows = Object.values(bag);
   const max = Math.max(1, ...rows.map((r) => r.qty));
   return (
     <div>
       <div className="hrow"><div><h1>订购分布</h1><p>按商品、客户、波次、尺码分析数量，可导出</p></div>
-        <Btn sm ghost onClick={() => downloadText("订购分布.csv", "款号,名称,波次,数量\n" + rows.map((r) => [r.id, r.name, r.wave, r.qty].join(",")).join("\n"), "text/csv")}>导出</Btn>
+        <Btn sm ghost onClick={() => downloadText("订购分布.csv", "维度,名称,数量\n" + rows.map((r) => [r.id, r.name, r.qty].join(",")).join("\n"), "text/csv")}>导出</Btn>
+      </div>
+      <div className="tabs">
+        {[["product", "商品"], ["dealer", "客户"], ["wave", "波次"], ["size", "尺码"]].map(([k, n]) => (
+          <button key={k} className={dim === k ? "on" : ""} onClick={() => setDim(k)}>{n}</button>
+        ))}
       </div>
       <div className="chart">
         {rows.map((r) => <b key={r.id} title={r.id} style={{ height: (r.qty / max) * 160 + 8 }} />)}
       </div>
-      <DataTable columns={[{ key: "id", title: "款号" }, { key: "name", title: "名称" }, { key: "wave", title: "波次" }, { key: "qty", title: "订购量" }]} rows={rows} />
+      <DataTable columns={[{ key: "id", title: "编码" }, { key: "name", title: "名称" }, { key: "qty", title: "订购量" }]} rows={rows} />
     </div>
   );
 }
@@ -549,7 +595,7 @@ function OrgOps({ s }) {
       <DataTable columns={[
         { key: "account", title: "账号" }, { key: "name", title: "姓名" }, { key: "org", title: "组织" }, { key: "role", title: "角色" },
         { key: "status", title: "状态", render: (r) => statusLabel(r.status) },
-        { key: "op", title: "", render: (r) => r.role.startsWith("dealer") ? null : <button onClick={() => Taovo.toggleUser(r.id)}>{r.status === "active" ? "停用" : "启用"}</button> },
+        { key: "op", title: "", render: (r) => r.role.startsWith("dealer") ? null : <span><button onClick={() => Taovo.toggleUser(r.id)}>{r.status === "active" ? "停用" : "启用"}</button> <button onClick={() => Taovo.resetPassword(r.id)}>重置密码</button></span> },
       ]} rows={s.users.filter((u) => !u.role.startsWith("dealer"))} />
       <div className="row" style={{ marginTop: 16 }}>
         <Field label="姓名"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>

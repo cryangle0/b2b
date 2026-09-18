@@ -4,13 +4,17 @@ const { Icon, Photo, go, Btn, Field, Modal, Empty, Money, statusLabel, DataTable
 function MallNav({ s, path }) {
   const count = (s.cart || []).reduce((n, c) => n + c.qty, 0);
   const [q, setQ] = useState("");
+  const mobile = typeof window !== "undefined" && window.innerWidth < 960;
+  const names = (mobile ? s.cms.h5Nav : s.cms.nav) || s.cms.nav || ["现货", "期货", "订货会"];
+  const hrefOf = (name) => (/期货/.test(name) ? "/shop/futures" : /订货/.test(name) ? "/fair" : "/shop/spot");
   return (
     <header className="top">
       <a className="logo" href="#/">TAOVO<span>Order</span></a>
       <nav className="nav">
-        <a className={path.startsWith("/shop/spot") ? "active" : ""} href="#/shop/spot">现货</a>
-        <a className={path.startsWith("/shop/futures") ? "active" : ""} href="#/shop/futures">期货</a>
-        <a className={path.startsWith("/fair") ? "active" : ""} href="#/fair">订货会</a>
+        {names.map((n) => {
+          const href = hrefOf(n);
+          return <a key={n} className={path.startsWith(href) || (href === "/fair" && path === "/fair") ? "active" : ""} href={"#" + href}>{n}</a>;
+        })}
       </nav>
       <div className="tools">
         <form className="searchbox" onSubmit={(e) => { e.preventDefault(); go("/shop/spot?q=" + encodeURIComponent(q)); }}>
@@ -45,6 +49,8 @@ function MallTab({ path }) {
 function ProductCard({ p }) {
   const expired = Taovo.isExpired(p);
   const can = Taovo.canOrder(p);
+  const stock = Object.values(p.stock || {}).reduce((n, v) => n + (Number(v) || 0), 0);
+  const label = !can ? (expired ? "不可订购" : "暂不可订") : stock <= 0 ? "缺货" : Money(p.price);
   return (
     <a className="card" href={"#/p/" + p.id}>
       <div className="pic">
@@ -52,11 +58,12 @@ function ProductCard({ p }) {
         {p.fair && <span className="tag">订货会</span>}
         {expired && <span className="tag">已过期</span>}
         {p.status === "off" && <span className="tag">下架</span>}
+        {can && stock <= 0 && <span className="tag">缺货</span>}
       </div>
       <div className="meta">
         <strong>{p.name}</strong>
-        <em>{p.nameZh} · {p.wave} 波 · {p.type === "futures" ? "期货" : "现货"}</em>
-        <b className={can ? "" : "sold"}>{can ? Money(p.price) : (expired ? "不可订购" : "暂不可订")}</b>
+        <em>{p.nameZh} · {p.wave} 波 · {p.type === "futures" ? "期货" : "现货"}{stock > 0 ? " · 可订 " + stock : ""}</em>
+        <b className={can && stock > 0 ? "" : "sold"}>{label}</b>
       </div>
     </a>
   );
@@ -178,6 +185,8 @@ function PdpView({ s, id }) {
   const p = s.products.find((x) => x.id === id);
   const [qty, setQty] = useState({});
   const [img, setImg] = useState(0);
+  const [buy, setBuy] = useState(false);
+  const [addr, setAddr] = useState(s.addresses.find((a) => a.def)?.line || s.addresses[0]?.line || "");
   if (!p) return <Empty title="商品不存在" text="返回列表" action={<Btn onClick={() => go("/shop/spot")}>现货</Btn>} />;
   const can = Taovo.canOrder(p);
   const expired = Taovo.isExpired(p);
@@ -221,10 +230,23 @@ function PdpView({ s, id }) {
           <Btn block disabled={!can || !total} onClick={() => Taovo.addToBag(p.id, qty)}>加入购物袋 · {total} 件</Btn>
         </div>
         <div className="row" style={{ marginTop: 10 }}>
+          <Btn ghost block disabled={!can || !total} onClick={() => setBuy(true)}>立即下单</Btn>
+        </div>
+        <div className="row" style={{ marginTop: 10 }}>
           <Btn ghost sm onClick={() => Taovo.toggleFav(p.id)}>{s.favorites.includes(p.id) ? "已收藏" : "收藏"}</Btn>
-          <Btn ghost sm onClick={() => Taovo.addWish(p.id, p.sizes[0])}>缺货心愿单</Btn>
+          <Btn ghost sm onClick={() => Taovo.addWish(p.id, p.sizes.find((sz) => (p.stock[sz] || 0) <= 0) || p.sizes[0])}>缺货心愿单</Btn>
           <Btn ghost sm onClick={() => go("/request")}>求购</Btn>
         </div>
+        {buy && (
+          <Modal title="提交订购单" onClose={() => setBuy(false)} footer={<Btn block onClick={() => {
+            const lines = Object.entries(qty).filter(([, v]) => Number(v) > 0).map(([size, qn]) => ({ pid: p.id, size, qty: Number(qn), price: p.price }));
+            const o = Taovo.submitOrder({ address: addr, lines, type: p.type, remark: "详情页直接下单" });
+            if (o) go("/orders/" + o.id);
+          }}>确认提交</Btn>}>
+            <Field label="地址"><input value={addr} onChange={(e) => setAddr(e.target.value)} /></Field>
+            <p className="muted">{total} 件 · {Money(p.price * total)} · 提交后进入审核</p>
+          </Modal>
+        )}
         <p style={{ marginTop: 28, color: "#555", lineHeight: 1.6 }}>{p.desc}</p>
       </div>
     </div>
@@ -281,6 +303,9 @@ function BagView({ s }) {
             <i>应付</i><b>{Money(promo.pay)}</b>
           </div>
           <div className="muted" style={{ margin: "8px 0 16px" }}>{promo.label.join(" · ") || "无活动"}</div>
+          {selected.some((c) => Taovo.product(c.pid)?.type === "futures") && selected.some((c) => Taovo.product(c.pid)?.type !== "futures") && (
+            <p className="muted">现货与期货将拆成两张订购单分别审核。</p>
+          )}
           <Btn block onClick={() => {
             const a = s.addresses.find((x) => x.id === addr);
             const o = Taovo.submitOrder({ address: a?.line, remark });
@@ -404,6 +429,7 @@ function OrderDetail({ s, id }) {
           <Btn sm ghost onClick={() => dl("csv")}>Excel</Btn>
           <Btn sm ghost onClick={() => dl("pdf")}>PDF</Btn>
           {o.status !== "pending_review" && o.payStatus === "unpaid" && <Btn sm onClick={() => setPay(true)}>支付</Btn>}
+          {o.payStatus === "paying" && <span className="muted">渠道回调中</span>}
           {o.status === "pending_review" && <span className="muted">审核通过后可支付</span>}
         </div>
       </div>
@@ -449,6 +475,8 @@ function OrderDetail({ s, id }) {
 function AccountView({ s }) {
   const unread = s.notices.filter((n) => !n.read).length;
   const main = s.session.role === "dealer_main";
+  const [name, setName] = useState(s.session.name);
+  const [password, setPassword] = useState("");
   const items = [
     ["订单中心", "/orders"],
     ["收藏 / 心愿单", "/heart"],
@@ -465,6 +493,9 @@ function AccountView({ s }) {
     <div className="wrap" style={{ padding: "40px 0 80px", maxWidth: 720 }}>
       <h1 style={{ fontSize: 36, fontWeight: 400 }}>{s.session.name}</h1>
       <p className="muted">{s.session.org} · {s.session.account}</p>
+      <Field label="显示名"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
+      <Field label="修改密码"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="留空则不改" /></Field>
+      <Btn sm onClick={() => Taovo.updateProfile(password ? { name, password } : { name })}>保存账号</Btn>
       <div style={{ marginTop: 28 }}>
         {items.map(([n, h]) => <a key={h} href={"#" + h} style={{ display: "block", padding: "18px 0", borderBottom: "1px solid var(--line)", fontSize: 18 }}>{n}</a>)}
       </div>
@@ -510,7 +541,7 @@ function CompanyView({ s }) {
       {main ? (
         <>
           <Field label="认证地址 / 资料"><input value={cert} onChange={(e) => setCert(e.target.value)} /></Field>
-          <Btn sm onClick={() => Taovo.toast("企业认证信息已保存")}>保存企业信息</Btn>
+          <Btn sm onClick={() => Taovo.saveDealer(dealer.id, { address: cert, cert: "已认证" })}>保存企业信息</Btn>
           <h2 style={{ fontSize: 22, margin: "32px 0 12px", fontWeight: 400 }}>子账号</h2>
           <DataTable columns={[{ key: "name", title: "姓名" }, { key: "account", title: "账号" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }, { key: "op", title: "", render: (r) => <button onClick={(e) => { e.stopPropagation(); Taovo.toggleUser(r.id); }}>{r.status === "active" ? "停用" : "启用"}</button> }]} rows={subs} />
           <div className="row" style={{ marginTop: 16 }}>
@@ -578,7 +609,16 @@ function MediaView({ s }) {
     <div className="wrap" style={{ padding: "32px 0 80px" }}>
       <div className="hrow">
         <div><h1>素材库</h1><p>按款号、年份筛选图片与视频，用于经销商自建详情页</p></div>
-        <Btn sm ghost onClick={() => Taovo.toast("已打包下载 " + rows.length + " 个文件")}>批量下载</Btn>
+        <Btn sm ghost onClick={() => {
+          rows.forEach((m) => {
+            const a = document.createElement("a");
+            a.href = m.src;
+            a.download = m.name;
+            a.target = "_blank";
+            a.click();
+          });
+          Taovo.toast("已开始下载 " + rows.length + " 个文件");
+        }}>批量下载</Btn>
       </div>
       <div className="row">
         <Field label="款号"><input value={pid} onChange={(e) => setPid(e.target.value)} placeholder="TW-1001" /></Field>
@@ -675,7 +715,7 @@ function MallApp({ s, path, parts, query }) {
   else if (path === "/media") body = <MediaView s={s} />;
   else if (path === "/contracts") body = <SimpleList title="合同" rows={s.contracts.filter((c) => c.dealerId === s.session.dealerId)} columns={[{ key: "id", title: "编号" }, { key: "title", title: "名称" }, { key: "status", title: "状态" }, { key: "from", title: "起" }, { key: "to", title: "止" }, { key: "file", title: "文件", render: (r) => <button onClick={() => Taovo.toast("下载 " + r.file)}>下载</button> }]} />;
   else if (path === "/statements") body = <SimpleList title="对账单" rows={s.statements.filter((c) => c.dealerId === s.session.dealerId)} columns={[{ key: "id", title: "编号" }, { key: "period", title: "账期" }, { key: "amount", title: "应付", render: (r) => Money(r.amount) }, { key: "paid", title: "已付", render: (r) => Money(r.paid) }, { key: "status", title: "状态" }, { key: "op", title: "", render: (r) => r.status === "待经销商核对" ? <button onClick={() => Taovo.confirmStatement(r.id)}>核对无误</button> : "—"}]} />;
-  else if (path === "/notices") body = <SimpleList title="提醒" rows={s.notices} columns={[{ key: "title", title: "内容" }, { key: "time", title: "时间" }, { key: "go", title: "", render: (r) => <a href={r.href}>打开</a> }]} />;
+  else if (path === "/notices") body = <SimpleList title="提醒" rows={s.notices} columns={[{ key: "title", title: "内容" }, { key: "time", title: "时间" }, { key: "read", title: "状态", render: (r) => r.read ? "已读" : "未读" }, { key: "go", title: "", render: (r) => <span><a href={r.href} onClick={() => Taovo.markNotice(r.id)}>打开</a> · <button onClick={() => Taovo.markNotice(r.id)}>标已读</button></span> }]} />;
   else body = <Empty title="页面不存在" text={path} />;
 
   return (

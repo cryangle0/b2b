@@ -79,6 +79,7 @@ function statusLabel(s) {
     partial: "部分发货",
     shipped: "已发货",
     rejected: "已驳回",
+    paying: "支付中",
     unpaid: "未支付",
     paid: "已支付",
     pending: "待处理",

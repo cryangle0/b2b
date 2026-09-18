@@ -1,5 +1,5 @@
 window.Taovo = (function () {
-  const KEY = "taovo-b2b-proto-v2";
+  const KEY = "taovo-b2b-proto-v3";
   const seed = window.TAOVO_SEED;
 
   function clone(v) {
@@ -237,7 +237,7 @@ window.Taovo = (function () {
       for (const l of items) {
         const p = product(l.pid);
         if (!canOrder(p)) {
-          toast(p.id + " 当前不可订购", "err");
+          toast((p && p.id) + " 当前不可订购", "err");
           return null;
         }
         if (l.qty > (p.stock[l.size] || 0)) {
@@ -245,30 +245,39 @@ window.Taovo = (function () {
           return null;
         }
       }
-      const id = "SO-" + String(Date.now()).slice(-8);
-      const order = {
-        id,
-        dealerId: state.session.dealerId,
-        type: type || (items.some((i) => product(i.pid).type === "futures") ? "futures" : "spot"),
-        status: "pending_review",
-        payStatus: "unpaid",
-        payMethod: payMethod || "",
-        created: now(),
-        address,
-        remark: remark || "",
-        lines: items,
-        history: [{ t: now(), e: "经销商提交订购单" }],
-      };
-      items.forEach((l) => {
-        const p = product(l.pid);
-        p.stock[l.size] = (p.stock[l.size] || 0) - l.qty;
+      const groups = type
+        ? [{ type, items }]
+        : [
+            { type: "spot", items: items.filter((i) => product(i.pid).type !== "futures") },
+            { type: "futures", items: items.filter((i) => product(i.pid).type === "futures") },
+          ].filter((g) => g.items.length);
+      const created = groups.map((g) => {
+        const id = "SO-" + String(Date.now()).slice(-8) + g.type.slice(0, 1).toUpperCase();
+        const order = {
+          id,
+          dealerId: state.session.dealerId,
+          type: g.type,
+          status: "pending_review",
+          payStatus: "unpaid",
+          payMethod: payMethod || "",
+          created: now(),
+          address,
+          remark: remark || "",
+          lines: g.items,
+          history: [{ t: now(), e: "经销商提交" + (g.type === "futures" ? "预售" : "现货") + "订购单" }],
+        };
+        g.items.forEach((l) => {
+          const p = product(l.pid);
+          p.stock[l.size] = (p.stock[l.size] || 0) - l.qty;
+        });
+        state.orders.unshift(order);
+        state.logs.unshift({ id: Date.now() + Math.random(), user: state.session.name, type: "新增", result: "提交 " + id, time: now(), ip: "10.2.1.3" });
+        return order;
       });
-      state.orders.unshift(order);
       if (!lines) state.cart = state.cart.filter((c) => c.selected === false);
-      state.logs.unshift({ id: Date.now(), user: state.session.name, type: "新增", result: "提交 " + id, time: now(), ip: "10.2.1.3" });
       emit();
-      toast("订购单已提交，等待审核");
-      return order;
+      toast(created.length > 1 ? "已拆成现货/预售两张订购单，等待审核" : "订购单已提交，等待审核");
+      return created[0];
     },
     reviewOrder(id, action, adjust) {
       const o = state.orders.find((x) => x.id === id);
@@ -284,6 +293,21 @@ window.Taovo = (function () {
         if (adjust && adjust.lines) o.lines = adjust.lines;
         o.status = "active";
         o.history.push({ t: now(), e: "审核通过，订单生效" });
+        if (!o.contractId) {
+          const cid = "CT-" + id.slice(-4);
+          state.contracts.unshift({
+            id: cid,
+            dealerId: o.dealerId,
+            title: o.id + " 订购合同",
+            orders: [o.id],
+            status: "生效",
+            from: state.today,
+            to: "2026-12-31",
+            file: cid + ".pdf",
+          });
+          o.contractId = cid;
+          o.history.push({ t: now(), e: "已关联合同 " + cid });
+        }
       }
       state.logs.unshift({
         id: Date.now(),
@@ -299,21 +323,33 @@ window.Taovo = (function () {
     payOrder(id, method, channelNo) {
       const o = state.orders.find((x) => x.id === id);
       if (!o) return;
-      o.payStatus = "paid";
+      if (o.status === "pending_review") {
+        toast("审核通过后再支付", "err");
+        return;
+      }
+      o.payStatus = "paying";
       o.payMethod = method;
-      const amount = lineAmount(o.lines);
+      const pid = "PAY-" + String(Date.now()).slice(-6);
       state.payments.unshift({
-        id: "PAY-" + String(Date.now()).slice(-6),
+        id: pid,
         orderId: id,
         channel: method,
         channelNo: channelNo || "MOCK" + Date.now(),
-        amount,
-        status: "success",
+        amount: lineAmount(o.lines),
+        status: "pending",
         time: now(),
       });
-      o.history.push({ t: now(), e: method + " 支付成功 " + amount });
+      o.history.push({ t: now(), e: "发起" + method + "，等待渠道回调" });
       emit();
-      toast("支付完成");
+      toast("已调起" + method + "，等待回调验签");
+      setTimeout(() => {
+        const pay = state.payments.find((x) => x.id === pid);
+        if (pay) pay.status = "success";
+        o.payStatus = "paid";
+        o.history.push({ t: now(), e: method + " 回调验签通过 " + lineAmount(o.lines) });
+        emit();
+        toast("支付完成");
+      }, 900);
     },
     ship(orderId, payload) {
       const o = state.orders.find((x) => x.id === orderId);
@@ -389,9 +425,21 @@ window.Taovo = (function () {
           address: a.city,
         });
         a.dealerId = did;
+        const acc = "d" + did.slice(-4);
+        state.users.push({
+          id: "u-" + Date.now(),
+          name: a.contact,
+          account: acc,
+          password: "123456",
+          role: "dealer_main",
+          org: a.company,
+          dealerId: did,
+          status: "active",
+        });
+        a.account = acc;
       }
       emit();
-      toast(action === "approved" ? "已准入并建档" : action === "need_info" ? "已要求补资料" : "已驳回");
+      toast(action === "approved" ? "已准入、建档并开通账号 " + a.account + " / 123456" : action === "need_info" ? "已要求补资料" : "已驳回");
     },
     bindAccount(dealerId, account, name) {
       state.users.push({
@@ -452,15 +500,30 @@ window.Taovo = (function () {
     },
     importStock(rows) {
       let n = 0;
+      const hits = [];
       rows.forEach((r) => {
         const p = product(r.pid);
         if (!p) return;
         if (p.stock[r.size] == null) p.stock[r.size] = 0;
+        const before = p.stock[r.size] || 0;
         p.stock[r.size] = Number(r.qty);
         n++;
+        if (before <= 0 && Number(r.qty) > 0) hits.push({ pid: r.pid, size: r.size });
+      });
+      hits.forEach((h) => {
+        const wished = (state.wishlist || []).some((w) => w.pid === h.pid && w.size === h.size);
+        if (wished) {
+          state.notices.unshift({
+            id: "N" + Date.now() + h.pid + h.size,
+            title: h.pid + " " + h.size + " 已到货，可返回订购",
+            time: now(),
+            read: false,
+            href: "#/p/" + h.pid,
+          });
+        }
       });
       emit();
-      toast("已写入 " + n + " 条可订量");
+      toast("已写入 " + n + " 条可订量" + (hits.length ? "，并通知心愿单经销商" : ""));
     },
     matchImages(files) {
       const matched = [];
@@ -696,8 +759,108 @@ window.Taovo = (function () {
         job.last = now();
         job.result = "手动同步完成";
       }
+      if (name.indexOf("经销商") >= 0) {
+        state.dealers.forEach((d) => { d.synced = now(); });
+        if (!state.dealers.find((d) => d.id === "D-SYNC")) {
+          state.dealers.push({
+            id: "D-SYNC",
+            name: "ERP 新同步客户",
+            short: "新同步",
+            city: "宁波",
+            level: "C",
+            status: "active",
+            credit: 0,
+            contact: "ERP",
+            phone: "—",
+            erpId: "ERP-NB-NEW",
+            synced: now(),
+            cert: "待认证",
+            address: "宁波",
+          });
+        }
+      }
+      if (name.indexOf("现货") >= 0) {
+        state.products.forEach((p) => { if (p.type === "spot") p.synced = now(); });
+      }
       emit();
       toast(name + " 已同步");
+    },
+    saveDealer(id, patch) {
+      const d = state.dealers.find((x) => x.id === id);
+      if (!d) return;
+      Object.assign(d, patch);
+      emit();
+      toast("企业认证信息已保存");
+    },
+    resetPassword(userId) {
+      const u = state.users.find((x) => x.id === userId);
+      if (!u) return;
+      u.password = "123456";
+      state.logs.unshift({ id: Date.now(), user: state.session.name, type: "修改", result: "重置 " + u.account + " 密码", time: now(), ip: "10.2.1.3" });
+      emit();
+      toast("密码已重置为 123456");
+    },
+    updateProfile(patch) {
+      const u = state.users.find((x) => x.id === state.session.id);
+      if (!u) return;
+      Object.assign(u, patch);
+      Object.assign(state.session, patch);
+      emit();
+      toast("账号信息已保存");
+    },
+    createFuturesFromSpot(pid, validTo, lead) {
+      const src = product(pid);
+      if (!src || src.type !== "spot") {
+        toast("只能从已同步现货创建预售", "err");
+        return;
+      }
+      const id = src.id.replace("TW-1", "TW-2");
+      const nid = product(id) ? src.id + "-F" : id;
+      if (product(nid)) {
+        toast(nid + " 已存在", "err");
+        return;
+      }
+      const p = JSON.parse(JSON.stringify(src));
+      p.id = nid;
+      p.type = "futures";
+      p.lead = lead || "期货 45 天";
+      p.validFrom = state.today;
+      p.validTo = validTo;
+      p.warehouse = "预售仓";
+      p.fair = true;
+      state.products.unshift(p);
+      state.productLogs.unshift({ t: now(), user: state.session.name, action: "现货转预售", target: src.id + " → " + nid });
+      emit();
+      toast("已从 " + src.id + " 创建预售 " + nid);
+    },
+    markNotice(id) {
+      const n = state.notices.find((x) => x.id === id);
+      if (n) n.read = true;
+      emit();
+    },
+    bindSub(dealerId, name, account) {
+      const d = state.dealers.find((x) => x.id === dealerId);
+      state.users.push({
+        id: "u-" + Date.now(),
+        name,
+        account,
+        password: "123456",
+        role: "dealer_sub",
+        org: d?.name,
+        dealerId,
+        status: "active",
+      });
+      emit();
+      toast("已创建子账号并绑定档案");
+    },
+    linkContract(cid, orderId) {
+      const c = state.contracts.find((x) => x.id === cid);
+      const o = state.orders.find((x) => x.id === orderId);
+      if (!c || !o) return;
+      c.orders = Array.from(new Set((c.orders || []).concat(orderId)));
+      o.contractId = cid;
+      emit();
+      toast("合同已关联订单");
     },
     logApi(id, ok) {
       const a = state.apis.find((x) => x.id === id);
