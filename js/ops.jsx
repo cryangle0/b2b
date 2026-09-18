@@ -206,11 +206,59 @@ function ApplyDetail({ s, id }) {
   );
 }
 
+function accountTpl() {
+  return [
+    "账号,姓名,手机,邮箱,角色,绑定经销商,初始密码",
+    "hzdong,何清,13700001012,heqing@taowo.demo,主账号,杭州东望体育,123456",
+    "cdlushan,马川,13600001990,,主账号,D-10990,123456",
+    "hzsub1,东望仓管,13700001013,,子账号,杭州东望体育,123456",
+  ].join("\n");
+}
+
 function AccountsOps({ s }) {
+  const [report, setReport] = useState(null);
   const rows = s.users.filter((u) => String(u.role).startsWith("dealer") && u.status !== "pending");
+  function runImport(text) {
+    setReport(Taowo.importDealerAccounts(text));
+  }
   return (
     <div>
-      <div className="hrow"><div><h1>账号绑定</h1><p>已审核通过的经销商账号。点进详情看字段并绑定档案。</p></div></div>
+      <div className="hrow">
+        <div><h1>账号绑定</h1><p>已审核通过的经销商账号。可下载模板批量导入；绑定列填档案号或企业名，空着则不绑。</p></div>
+      </div>
+      <div className="row" style={{ marginBottom: 16 }}>
+        <Btn sm ghost onClick={() => { downloadText("经销商账号导入模板.csv", accountTpl(), "text/csv"); Taowo.toast("已下载模板，填写后上传 CSV"); }}>下载导入模板</Btn>
+        <label className="btn sm">上传导入
+          <input type="file" accept=".csv,.txt" hidden onChange={(e) => {
+            const file = e.target.files[0];
+            e.target.value = "";
+            if (!file) return;
+            if (/\.xlsx?$/i.test(file.name)) return Taowo.toast("请另存为 CSV 后上传。浏览器读不了 xlsx。", "err");
+            const r = new FileReader();
+            r.onload = () => runImport(String(r.result));
+            r.readAsText(file);
+          }} />
+        </label>
+      </div>
+      <details open style={{ marginBottom: 16 }}>
+        <summary>模板说明与预览导入</summary>
+        <p className="muted">表头必须有账号、姓名。角色填主账号或子账号。绑定经销商填档案号、企业名或 ERP 号；找不到档案则该行失败，不会半写入。</p>
+        <Field label="或粘贴 CSV">
+          <textarea defaultValue={accountTpl()} id="acct-import-text" rows={5} />
+        </Field>
+        <Btn sm onClick={() => runImport(document.getElementById("acct-import-text").value)}>导入粘贴内容</Btn>
+      </details>
+      {report && (
+        <div style={{ marginBottom: 20 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 500, marginBottom: 8 }}>最近导入：新建 {report.created} · 更新 {report.updated} · 失败 {report.failed.length}</h2>
+          {report.rows.length > 0 && (
+            <DataTable columns={[{ key: "account", title: "账号" }, { key: "name", title: "姓名" }, { key: "action", title: "动作" }, { key: "dealerId", title: "绑定" }, { key: "msg", title: "说明" }]} rows={report.rows} />
+          )}
+          {report.failed.length > 0 && (
+            <DataTable columns={[{ key: "line", title: "行" }, { key: "account", title: "账号" }, { key: "msg", title: "失败原因" }]} rows={report.failed} />
+          )}
+        </div>
+      )}
       <DataTable
         onRow={(r) => go("/ops/accounts/" + r.id)}
         columns={[
@@ -1012,7 +1060,7 @@ function LogOps({ s }) {
     <div>
       <div className="hrow"><div><h1>日志</h1><p>登录、商品上架、商品下架、审核。上下架同时写入商品操作记录。</p></div></div>
       <div className="chips">
-        {["", "登录", "商品上架", "商品下架", "审核", "修改"].map((t) => <button key={t || "all"} className={"chip " + (type === t ? "on" : "")} onClick={() => setType(t)}>{t || "全部"}</button>)}
+        {["", "登录", "商品上架", "商品下架", "审核", "导入", "修改"].map((t) => <button key={t || "all"} className={"chip " + (type === t ? "on" : "")} onClick={() => setType(t)}>{t || "全部"}</button>)}
       </div>
       <DataTable columns={[{ key: "time", title: "时间" }, { key: "user", title: "人员" }, { key: "type", title: "类型" }, { key: "result", title: "结果" }, { key: "ip", title: "IP" }]} rows={rows} />
       <h2 style={{ fontSize: 20, margin: "28px 0 12px", fontWeight: 500 }}>商品上下架记录</h2>

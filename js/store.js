@@ -967,6 +967,105 @@ window.Taowo = (function () {
       emit();
       toast("已绑定 " + d.name);
     },
+    importDealerAccounts(text) {
+      const lines = String(text || "").trim().split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) {
+        toast("模板至少要有表头和一行账号", "err");
+        return { created: 0, updated: 0, failed: [{ line: 1, account: "", msg: "空文件" }], rows: [] };
+      }
+      const header = lines.shift().split(/[,	]/).map((s) => s.trim());
+      const idx = (re) => header.findIndex((h) => re.test(h));
+      const iAcc = idx(/账号|account/i);
+      const iName = idx(/姓名|名称|name/i);
+      const iPhone = idx(/手机|电话|phone/i);
+      const iEmail = idx(/邮箱|邮件|email/i);
+      const iRole = idx(/角色|role/i);
+      const iBind = idx(/绑定|档案|经销商|dealer/i);
+      const iPwd = idx(/密码|password/i);
+      if (iAcc < 0 || iName < 0) {
+        toast("模板表头必须含：账号、姓名", "err");
+        return { created: 0, updated: 0, failed: [{ line: 1, account: "", msg: "缺账号或姓名列" }], rows: [] };
+      }
+      const findDealer = (raw) => {
+        const q = String(raw || "").trim().toLowerCase();
+        if (!q) return null;
+        return state.dealers.find((d) => [d.id, d.name, d.short, d.erpId].some((x) => String(x || "").toLowerCase() === q))
+          || state.dealers.find((d) => [d.id, d.name, d.short, d.erpId].some((x) => String(x || "").toLowerCase().includes(q)));
+      };
+      const parseRole = (raw) => {
+        const t = String(raw || "").trim();
+        if (/子/.test(t) || t === "dealer_sub") return "dealer_sub";
+        return "dealer_main";
+      };
+      let created = 0;
+      let updated = 0;
+      const failed = [];
+      const rows = [];
+      lines.forEach((line, i) => {
+        const c = line.split(/[,	]/);
+        const account = (c[iAcc] || "").trim();
+        const name = (c[iName] || "").trim();
+        const phone = iPhone >= 0 ? (c[iPhone] || "").trim() : "";
+        const email = iEmail >= 0 ? (c[iEmail] || "").trim() : "";
+        const bindRaw = iBind >= 0 ? (c[iBind] || "").trim() : "";
+        const password = (iPwd >= 0 && (c[iPwd] || "").trim()) ? (c[iPwd] || "").trim() : "123456";
+        const role = parseRole(iRole >= 0 ? c[iRole] : "");
+        const no = i + 2;
+        if (!account || !name) {
+          failed.push({ line: no, account, msg: "账号和姓名必填" });
+          return;
+        }
+        if (state.users.some((u) => u.account === account && !String(u.role).startsWith("dealer"))) {
+          failed.push({ line: no, account, msg: "该账号已是运营账号，不能导入为经销商" });
+          return;
+        }
+        let dealer = null;
+        if (bindRaw) {
+          dealer = findDealer(bindRaw);
+          if (!dealer) {
+            failed.push({ line: no, account, msg: "找不到经销商档案：" + bindRaw });
+            return;
+          }
+        }
+        const hit = state.users.find((u) => u.account === account);
+        const patch = {
+          name,
+          phone,
+          email,
+          role,
+          password,
+          status: "active",
+          org: dealer ? dealer.name : (hit?.org || ""),
+          dealerId: dealer ? dealer.id : (hit?.dealerId || ""),
+        };
+        if (hit) {
+          Object.assign(hit, patch);
+          updated += 1;
+          rows.push({ account, name, action: "更新", dealerId: hit.dealerId || "", msg: "已更新" });
+        } else {
+          state.users.push({
+            id: "u-" + Date.now() + "-" + i,
+            account,
+            created: now(),
+            lastLogin: "",
+            ...patch,
+          });
+          created += 1;
+          rows.push({ account, name, action: "新建", dealerId: patch.dealerId || "", msg: "已开通，密码 " + password });
+        }
+      });
+      state.logs.unshift({
+        id: Date.now(),
+        user: state.session?.name || "系统",
+        type: "导入",
+        result: "经销商账号 新建" + created + " 更新" + updated + " 失败" + failed.length,
+        time: now(),
+        ip: "10.2.1.3",
+      });
+      emit();
+      toast("导入完成：新建 " + created + "，更新 " + updated + "，失败 " + failed.length);
+      return { created, updated, failed, rows };
+    },
     createWarehouse(form) {
       if (!(form.name || "").trim()) {
         toast("请填写仓库名", "err");
