@@ -1,6 +1,6 @@
-window.Taovo = (function () {
-  const KEY = "taovo-b2b-proto-v3";
-  const seed = window.TAOVO_SEED;
+window.Taowo = (function () {
+  const KEY = "taowo-b2b-proto-v4";
+  const seed = window.TAOWO_SEED;
 
   function clone(v) {
     return JSON.parse(JSON.stringify(v));
@@ -687,7 +687,7 @@ window.Taovo = (function () {
           name: c[idx("名称")] || base.name,
           year: Number(c[idx("年份")] || base.year || 2026),
           season: c[idx("季节")] || base.season || "SS26",
-          brand: c[idx("品牌")] || base.brand || "TAOVO",
+          brand: c[idx("品牌")] || base.brand || "TAOWO",
           cat: c[idx("大类")] || base.cat || "服装",
           sub: c[idx("小类")] || base.sub || "T恤",
           gender: c[idx("性别")] || base.gender || "中性",

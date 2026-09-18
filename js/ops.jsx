@@ -22,7 +22,7 @@ function OpsNav({ path, role }) {
   ];
   return (
     <aside className="side">
-      <a className="logo" href="#/ops">TAOVO<span>Ops</span></a>
+      <a className="logo" href="#/ops">TAOWO<span>Ops</span></a>
       {groups.map(([g, items]) => {
         const vis = items.filter(([h]) => opsAllowed(role, h));
         if (!vis.length) return null;
@@ -34,7 +34,7 @@ function OpsNav({ path, role }) {
         );
       })}
       <div style={{ margin: "28px 12px" }}>
-        <a href="#/ops-login" onClick={() => Taovo.logout()}>退出</a>
+        <a href="#/ops-login" onClick={() => Taowo.logout()}>退出</a>
       </div>
     </aside>
   );
@@ -46,7 +46,7 @@ function OpsToday({ s }) {
   const rets = s.returns.filter((r) => r.status === "pending");
   return (
     <div>
-      <div className="hrow"><div><h1>今日</h1><p>{s.session.name} · {s.session.org}</p></div><Btn sm ghost onClick={() => Taovo.reset()}>重置演示</Btn></div>
+      <div className="hrow"><div><h1>今日</h1><p>{s.session.name} · {s.session.org}</p></div><Btn sm ghost onClick={() => Taowo.reset()}>重置演示</Btn></div>
       <div className="statrow">
         <div className="stat"><b>{pending.length}</b><span>待审核订购单</span></div>
         <div className="stat"><b>{apps.length}</b><span>入驻申请</span></div>
@@ -54,7 +54,7 @@ function OpsToday({ s }) {
         <div className="stat"><b>{rets.length}</b><span>待审退货</span></div>
       </div>
       <h2 style={{ fontSize: 20, fontWeight: 500, marginBottom: 12 }}>待审核</h2>
-      <DataTable onRow={(r) => go("/ops/review")} columns={[{ key: "id", title: "单号" }, { key: "dealerId", title: "经销商" }, { key: "created", title: "提交" }, { key: "amt", title: "金额", render: (r) => Money(Taovo.lineAmount(r.lines)) }]} rows={pending} />
+      <DataTable onRow={(r) => go("/ops/review")} columns={[{ key: "id", title: "单号" }, { key: "dealerId", title: "经销商" }, { key: "created", title: "提交" }, { key: "amt", title: "金额", render: (r) => Money(Taowo.lineAmount(r.lines)) }]} rows={pending} />
     </div>
   );
 }
@@ -78,7 +78,7 @@ function CmsView({ s }) {
             const hero = s.cms.hero.slice();
             hero[0] = { ...hero[0], title, sub };
             const parts = nav.split(/[\/,，]/).map((x) => x.trim()).filter(Boolean);
-            Taovo.saveCms(device === "H5" ? { h5Nav: parts, hero } : { nav: parts, hero });
+            Taowo.saveCms(device === "H5" ? { h5Nav: parts, hero } : { nav: parts, hero });
           }}>发布</Btn>
         </div>
       </div>
@@ -96,7 +96,7 @@ function DealersView({ s }) {
   return (
     <div>
       <div className="hrow"><div><h1>经销商档案</h1><p>同步 ERP 档案，查询企业资料与状态</p></div>
-        <Btn sm onClick={() => Taovo.runSync("ERP 经销商档案")}>从 ERP 同步</Btn>
+        <Btn sm onClick={() => Taowo.runSync("ERP 经销商档案")}>从 ERP 同步</Btn>
       </div>
       <Field label="查询"><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="名称 / 档案号 / ERP" /></Field>
       <DataTable columns={[
@@ -119,9 +119,9 @@ function ApplyOps({ s }) {
           <p>{a.note}</p>
           {a.status === "pending" || a.status === "need_info" ? (
             <div className="row" style={{ marginTop: 8 }}>
-              <Btn sm onClick={() => Taovo.reviewApply(a.id, "approved")}>准入</Btn>
-              <Btn sm ghost onClick={() => Taovo.reviewApply(a.id, "need_info", note || "请补充资料")}>补资料</Btn>
-              <Btn sm danger onClick={() => Taovo.reviewApply(a.id, "rejected", note)}>驳回</Btn>
+              <Btn sm onClick={() => Taowo.reviewApply(a.id, "approved")}>准入</Btn>
+              <Btn sm ghost onClick={() => Taowo.reviewApply(a.id, "need_info", note || "请补充资料")}>补资料</Btn>
+              <Btn sm danger onClick={() => Taowo.reviewApply(a.id, "rejected", note)}>驳回</Btn>
               <input placeholder="审核意见" value={note} onChange={(e) => setNote(e.target.value)} style={{ border: 0, borderBottom: "1px solid #111", minWidth: 200 }} />
             </div>
           ) : null}
@@ -144,14 +144,14 @@ function AccountsOps({ s }) {
         <button className={tab === "main" ? "on" : ""} onClick={() => setTab("main")}>主账号</button>
         <button className={tab === "sub" ? "on" : ""} onClick={() => setTab("sub")}>子账号</button>
       </div>
-      <DataTable columns={[{ key: "account", title: "账号" }, { key: "name", title: "姓名" }, { key: "role", title: "角色" }, { key: "dealerId", title: "档案" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }, { key: "op", title: "", render: (r) => <button onClick={() => Taovo.resetPassword(r.id)}>重置密码</button> }]} rows={users} />
+      <DataTable columns={[{ key: "account", title: "账号" }, { key: "name", title: "姓名" }, { key: "role", title: "角色" }, { key: "dealerId", title: "档案" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }, { key: "op", title: "", render: (r) => <button onClick={() => Taowo.resetPassword(r.id)}>重置密码</button> }]} rows={users} />
       <div className="row" style={{ marginTop: 20, alignItems: "end" }}>
         <Field label="档案">
           <select value={dealerId} onChange={(e) => setDealerId(e.target.value)}>{s.dealers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
         </Field>
         <Field label="姓名"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
         <Field label="账号"><input value={account} onChange={(e) => setAccount(e.target.value)} /></Field>
-        <Btn sm onClick={() => tab === "sub" ? Taovo.bindSub(dealerId, name, account) : Taovo.bindAccount(dealerId, account, name)}>{tab === "sub" ? "创建子账号" : "创建并绑定"}</Btn>
+        <Btn sm onClick={() => tab === "sub" ? Taowo.bindSub(dealerId, name, account) : Taowo.bindAccount(dealerId, account, name)}>{tab === "sub" ? "创建子账号" : "创建并绑定"}</Btn>
       </div>
     </div>
   );
@@ -165,7 +165,7 @@ function MasterView({ s }) {
       <div className="hrow"><div><h1>商品主数据</h1><p>品牌、属性、规格、分类、系列、交期、季节、性别、波次</p></div></div>
       {keys.map(([k, n]) => (
         <Field key={k} label={n}>
-          <input defaultValue={(dict[k] || []).join("、")} onBlur={(e) => Taovo.saveDict(k, e.target.value.split(/[、,，]/).map((x) => x.trim()).filter(Boolean))} />
+          <input defaultValue={(dict[k] || []).join("、")} onBlur={(e) => Taowo.saveDict(k, e.target.value.split(/[、,，]/).map((x) => x.trim()).filter(Boolean))} />
         </Field>
       ))}
     </div>
@@ -184,7 +184,7 @@ function ProductsOps({ s }) {
       <div className="hrow">
         <div><h1>商品</h1><p>现货同步 / Excel 导入；期货必须落在已有现货范围内，配置交期与有效期</p></div>
         <div className="row">
-          <Btn sm ghost onClick={() => Taovo.runSync("ERP 现货商品")}>ERP 同步</Btn>
+          <Btn sm ghost onClick={() => Taowo.runSync("ERP 现货商品")}>ERP 同步</Btn>
           <Btn sm ghost onClick={() => {
             const header = "款号,名称,年份,季节,品牌,大类,小类,性别,波次,价格,交期,期货有效期";
             const rows = s.products.map((p) => [p.id, p.name, p.year, p.season, p.brand, p.cat, p.sub, p.gender, p.wave, p.price, p.lead, p.validTo || ""].join(","));
@@ -204,13 +204,13 @@ function ProductsOps({ s }) {
           r.onload = () => setCsv(String(r.result));
           r.readAsText(f);
         }} />
-        <Btn sm onClick={() => Taovo.importProducts(csv)}>导入商品</Btn>
+        <Btn sm onClick={() => Taowo.importProducts(csv)}>导入商品</Btn>
         <div className="row" style={{ marginTop: 12, alignItems: "end" }}>
           <Field label="从现货创建预售">
             <select value={fromId} onChange={(e) => setFromId(e.target.value)}>{s.products.filter((p) => p.type === "spot").map((p) => <option key={p.id} value={p.id}>{p.id} {p.name}</option>)}</select>
           </Field>
           <Field label="有效期至"><input value={validTo} onChange={(e) => setValidTo(e.target.value)} /></Field>
-          <Btn sm onClick={() => Taovo.createFuturesFromSpot(fromId, validTo, "期货 45 天")}>生成预售</Btn>
+          <Btn sm onClick={() => Taowo.createFuturesFromSpot(fromId, validTo, "期货 45 天")}>生成预售</Btn>
         </div>
       </details>
       <div className="tabs">
@@ -220,11 +220,11 @@ function ProductsOps({ s }) {
       <DataTable onRow={(r) => setEdit(r)} columns={[
         { key: "id", title: "款号" }, { key: "name", title: "名称" }, { key: "wave", title: "波次" },
         { key: "price", title: "批发价", render: (r) => Money(r.price) },
-        { key: "status", title: "状态", render: (r) => (r.orderable && r.status === "live" ? (Taovo.isExpired(r) ? "过期禁购" : "可订") : "不可订") },
+        { key: "status", title: "状态", render: (r) => (r.orderable && r.status === "live" ? (Taowo.isExpired(r) ? "过期禁购" : "可订") : "不可订") },
         { key: "validTo", title: "有效期", render: (r) => r.validTo || "—" },
       ]} rows={rows} />
       {edit && (
-        <Modal title={edit.id} onClose={() => setEdit(null)} footer={<Btn onClick={() => { Taovo.upsertProduct(edit); setEdit(null); }}>保存</Btn>}>
+        <Modal title={edit.id} onClose={() => setEdit(null)} footer={<Btn onClick={() => { Taowo.upsertProduct(edit); setEdit(null); }}>保存</Btn>}>
           <Field label="名称"><input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
           <Field label="批发价"><input type="number" value={edit.price} onChange={(e) => setEdit({ ...edit, price: Number(e.target.value) })} /></Field>
           {edit.type === "futures" && (
@@ -249,7 +249,7 @@ function StockOps({ s }) {
   return (
     <div>
       <div className="hrow"><div><h1>仓库与可订量</h1><p>按款号 + 尺码批量导入，并预留 ERP 周期同步</p></div>
-        <Btn sm ghost onClick={() => Taovo.runSync("可订量")}>同步库存</Btn>
+        <Btn sm ghost onClick={() => Taowo.runSync("可订量")}>同步库存</Btn>
       </div>
       <DataTable columns={[{ key: "id", title: "仓库" }, { key: "name", title: "名称" }, { key: "city", title: "城市" }, { key: "skus", title: "SKU" }, { key: "sync", title: "频率" }]} rows={s.warehouses} />
       <Field label="导入 款号,尺码,可订量">
@@ -260,7 +260,7 @@ function StockOps({ s }) {
           const [pid, size, qty] = l.split(",");
           return { pid, size, qty };
         });
-        Taovo.importStock(rows);
+        Taowo.importStock(rows);
       }}>写入可订量</Btn>
     </div>
   );
@@ -275,15 +275,15 @@ function ImageOps({ s }) {
         const raw = Array.from(e.target.files || []);
         const files = raw.flatMap((f) => {
           if (/\.zip$/i.test(f.name)) {
-            Taovo.toast("已解析 ZIP，按命名规则展开主图/细节图");
+            Taowo.toast("已解析 ZIP，按命名规则展开主图/细节图");
             return [{ name: "TW-1002_main.jpg" }, { name: "TW-1002_d01.jpg" }];
           }
           return [{ name: f.name, url: URL.createObjectURL(f) }];
         });
-        setResult(Taovo.matchImages(files.length ? files : [{ name: "TW-1002_main.jpg" }, { name: "TW-1002_d01.jpg" }, { name: "unknown.png" }]));
+        setResult(Taowo.matchImages(files.length ? files : [{ name: "TW-1002_main.jpg" }, { name: "TW-1002_d01.jpg" }, { name: "unknown.png" }]));
       }} />
       <div className="row" style={{ margin: "12px 0" }}>
-        <Btn sm ghost onClick={() => setResult(Taovo.matchImages([{ name: "TW-1002_main.jpg" }, { name: "TW-1002_d01.jpg" }, { name: "bad.png" }]))}>演示匹配</Btn>
+        <Btn sm ghost onClick={() => setResult(Taowo.matchImages([{ name: "TW-1002_main.jpg" }, { name: "TW-1002_d01.jpg" }, { name: "bad.png" }]))}>演示匹配</Btn>
       </div>
       <DataTable columns={[{ key: "name", title: "文件" }, { key: "pid", title: "款号" }, { key: "ok", title: "结果", render: (r) => r.ok ? "已入库" : "未匹配，待人工" }]} rows={result} />
     </div>
@@ -301,9 +301,9 @@ function BatchOps({ s }) {
         {["", ...s.dictionaries.brands].map((b) => <button key={b || "all"} className={"chip " + (brand === b ? "on" : "")} onClick={() => setBrand(b)}>{b || "全部品牌"}</button>)}
       </div>
       <div className="row" style={{ margin: "12px 0" }}>
-        <Btn sm onClick={() => Taovo.batchStatus(sel.length ? sel : list.map((p) => p.id), { status: "live", orderable: true })}>上架</Btn>
-        <Btn sm ghost onClick={() => Taovo.batchStatus(sel.length ? sel : list.map((p) => p.id), { status: "off" })}>下架</Btn>
-        <Btn sm danger onClick={() => Taovo.batchStatus(sel.length ? sel : list.map((p) => p.id), { orderable: false })}>不可订购</Btn>
+        <Btn sm onClick={() => Taowo.batchStatus(sel.length ? sel : list.map((p) => p.id), { status: "live", orderable: true })}>上架</Btn>
+        <Btn sm ghost onClick={() => Taowo.batchStatus(sel.length ? sel : list.map((p) => p.id), { status: "off" })}>下架</Btn>
+        <Btn sm danger onClick={() => Taowo.batchStatus(sel.length ? sel : list.map((p) => p.id), { orderable: false })}>不可订购</Btn>
       </div>
       <table className="data">
         <thead><tr><th></th><th>款号</th><th>名称</th><th>状态</th></tr></thead>
@@ -329,7 +329,7 @@ function ReviewOps({ s }) {
       <div className="hrow"><div><h1>订购单审核</h1><p>品牌方审核价格与数量，通过后生效，可驳回或调整；通过后自动关联合同</p></div>
         <Btn sm ghost onClick={() => {
           const rows = s.orders.filter((o) => o.type !== "erp");
-          downloadText("B2B订单.csv", "单号,类型,状态,经销商,金额,时间\n" + rows.map((o) => [o.id, o.type, o.status, o.dealerId, Taovo.lineAmount(o.lines), o.created].join(",")).join("\n"), "text/csv");
+          downloadText("B2B订单.csv", "单号,类型,状态,经销商,金额,时间\n" + rows.map((o) => [o.id, o.type, o.status, o.dealerId, Taowo.lineAmount(o.lines), o.created].join(",")).join("\n"), "text/csv");
         }}>导出订单</Btn>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 24 }}>
@@ -358,8 +358,8 @@ function ReviewOps({ s }) {
             </table>
             {cur.status === "pending_review" && (
               <div className="row" style={{ marginTop: 16 }}>
-                <Btn sm onClick={() => Taovo.reviewOrder(cur.id, "approve", { lines: cur.lines })}>通过并生效</Btn>
-                <Btn sm danger onClick={() => Taovo.reviewOrder(cur.id, "reject", "数量需调整")}>驳回</Btn>
+                <Btn sm onClick={() => Taowo.reviewOrder(cur.id, "approve", { lines: cur.lines })}>通过并生效</Btn>
+                <Btn sm danger onClick={() => Taowo.reviewOrder(cur.id, "reject", "数量需调整")}>驳回</Btn>
               </div>
             )}
           </div>
@@ -374,7 +374,7 @@ function ErpOrders({ s }) {
   return (
     <div>
       <div className="hrow"><div><h1>ERP 原单</h1><p>未经过商城、在 ERP 直接创建的订单，只读映射</p></div>
-        <Btn sm ghost onClick={() => Taovo.runSync("ERP 原订单")}>同步</Btn>
+        <Btn sm ghost onClick={() => Taowo.runSync("ERP 原订单")}>同步</Btn>
       </div>
       <DataTable columns={[{ key: "externalNo", title: "外部单号" }, { key: "dealerId", title: "经销商" }, { key: "created", title: "日期" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }]} rows={rows} />
     </div>
@@ -413,10 +413,10 @@ function ShipOps({ s }) {
           <div className="row">
             <Btn sm onClick={() => {
               const lines = o.lines.map((l, i) => ({ pid: l.pid, size: l.size, qty: Number(document.getElementById("q" + i).value) || 0 })).filter((x) => x.qty);
-              Taovo.ship(o.id, { express, tracking, date: s.today, lines });
+              Taowo.ship(o.id, { express, tracking, date: s.today, lines });
             }}>生成发货单</Btn>
             <Btn sm ghost onClick={() => {
-              Taovo.updateDelivery(o.id, o.lines.map((l) => ({ pid: l.pid, size: l.size, shipped: l.qty })));
+              Taowo.updateDelivery(o.id, o.lines.map((l) => ({ pid: l.pid, size: l.size, shipped: l.qty })));
             }}>接口式回传全部发完</Btn>
           </div>
         </>
@@ -437,7 +437,7 @@ function RequestOps({ s }) {
           <b>{r.id}</b> {r.title}<div className="muted">{r.detail}</div>
           <div className="row" style={{ marginTop: 8 }}>
             <input value={reply} onChange={(e) => setReply(e.target.value)} style={{ flex: 1, border: 0, borderBottom: "1px solid #111" }} />
-            <Btn sm onClick={() => Taovo.replyRequest(r.id, "approved", reply)}>回写</Btn>
+            <Btn sm onClick={() => Taowo.replyRequest(r.id, "approved", reply)}>回写</Btn>
           </div>
         </div>
       ))}
@@ -454,9 +454,9 @@ function ReturnOps({ s }) {
           <b>{r.id}</b> {r.orderId} · {r.reason}
           <div className="muted">{statusLabel(r.status)}</div>
           <div className="row" style={{ marginTop: 8 }}>
-            <Btn sm onClick={() => Taovo.reviewReturn(r.id, "approved")}>通过</Btn>
-            <Btn sm ghost onClick={() => Taovo.reviewReturn(r.id, "rejected")}>驳回</Btn>
-            <Btn sm ghost onClick={() => Taovo.reviewReturn(r.id, "done")}>完结</Btn>
+            <Btn sm onClick={() => Taowo.reviewReturn(r.id, "approved")}>通过</Btn>
+            <Btn sm ghost onClick={() => Taowo.reviewReturn(r.id, "rejected")}>驳回</Btn>
+            <Btn sm ghost onClick={() => Taowo.reviewReturn(r.id, "done")}>完结</Btn>
           </div>
         </div>
       ))}
@@ -483,12 +483,12 @@ function ContractOps({ s }) {
       <DataTable columns={[{ key: "id", title: "编号" }, { key: "title", title: "名称" }, { key: "dealerId", title: "经销商" }, { key: "status", title: "状态" }, { key: "orders", title: "订单", render: (r) => (r.orders || []).join(", ") }]} rows={s.contracts} />
       <div className="row" style={{ marginTop: 16 }}>
         <Field label="名称"><input value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
-        <Btn sm onClick={() => Taovo.saveContract({ id: "CT-" + Date.now().toString().slice(-4), dealerId: "D-10086", title, orders: [], status: "草稿", from: s.today, to: "2026-12-31", file: "draft.pdf" })}>新建</Btn>
+        <Btn sm onClick={() => Taowo.saveContract({ id: "CT-" + Date.now().toString().slice(-4), dealerId: "D-10086", title, orders: [], status: "草稿", from: s.today, to: "2026-12-31", file: "draft.pdf" })}>新建</Btn>
       </div>
       <div className="row" style={{ marginTop: 12 }}>
         <Field label="合同"><select value={cid} onChange={(e) => setCid(e.target.value)}>{s.contracts.map((c) => <option key={c.id}>{c.id}</option>)}</select></Field>
         <Field label="订单"><select value={oid} onChange={(e) => setOid(e.target.value)}>{s.orders.filter((o) => o.type !== "erp").map((o) => <option key={o.id}>{o.id}</option>)}</select></Field>
-        <Btn sm onClick={() => Taovo.linkContract(cid, oid)}>关联</Btn>
+        <Btn sm onClick={() => Taowo.linkContract(cid, oid)}>关联</Btn>
       </div>
     </div>
   );
@@ -498,13 +498,13 @@ function StatementOps({ s }) {
   return (
     <div>
       <div className="hrow"><div><h1>对账单</h1><p>针对线下付款订单生成账期汇总</p></div>
-        <Btn sm onClick={() => Taovo.createStatement("2026-09", "D-10086")}>生成 9 月对账单</Btn>
+        <Btn sm onClick={() => Taowo.createStatement("2026-09", "D-10086")}>生成 9 月对账单</Btn>
       </div>
       <DataTable columns={[
         { key: "id", title: "编号" }, { key: "period", title: "账期" }, { key: "dealerId", title: "经销商" },
         { key: "amount", title: "应付", render: (r) => Money(r.amount) }, { key: "paid", title: "已付", render: (r) => Money(r.paid) },
         { key: "status", title: "状态" },
-        { key: "op", title: "", render: (r) => <button onClick={() => Taovo.confirmStatement(r.id)}>确认</button> },
+        { key: "op", title: "", render: (r) => <button onClick={() => Taowo.confirmStatement(r.id)}>确认</button> },
       ]} rows={s.statements} />
     </div>
   );
@@ -517,7 +517,7 @@ function CampaignOps({ s }) {
       <div className="hrow"><div><h1>营销活动</h1><p>满减、满折、优惠券及适用商品、客户、有效范围</p></div></div>
       <DataTable columns={[{ key: "id", title: "编号" }, { key: "name", title: "名称" }, { key: "type", title: "类型" }, { key: "scope", title: "范围" }, { key: "dealers", title: "客户" }, { key: "to", title: "截止" }, { key: "status", title: "状态" }]} rows={s.campaigns} />
       <Field label="新活动"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-      <Btn sm onClick={() => Taovo.saveCampaign({ id: "M-" + Date.now().toString().slice(-3), name, type: "满减", threshold: 10000, value: 300, scope: "现货", dealers: "全部", from: s.today, to: "2026-10-31", status: "live" })}>发布</Btn>
+      <Btn sm onClick={() => Taowo.saveCampaign({ id: "M-" + Date.now().toString().slice(-3), name, type: "满减", threshold: 10000, value: 300, scope: "现货", dealers: "全部", from: s.today, to: "2026-10-31", status: "live" })}>发布</Btn>
     </div>
   );
 }
@@ -528,7 +528,7 @@ function ReportOps({ s }) {
   const bag = {};
   orders.forEach((o) => {
     o.lines.forEach((l) => {
-      const p = Taovo.product(l.pid);
+      const p = Taowo.product(l.pid);
       const key = dim === "product" ? l.pid : dim === "dealer" ? o.dealerId : dim === "wave" ? (p?.wave || "—") : l.size;
       const name = dim === "product" ? p?.name : dim === "dealer" ? o.dealerId : dim === "wave" ? (p?.wave || "—") : l.size;
       bag[key] = bag[key] || { id: key, name, qty: 0 };
@@ -572,13 +572,13 @@ function ApiOps({ s }) {
           <div className="muted">上次 {a.last} · 成功 {a.ok} · 失败 {a.fail}</div>
           <div className="code">req {samples[a.id].req}\nres {samples[a.id].res}</div>
           <div className="row" style={{ marginTop: 8 }}>
-            <Btn sm ghost onClick={() => Taovo.logApi(a.id, true)}>模拟成功</Btn>
-            <Btn sm ghost onClick={() => Taovo.logApi(a.id, false)}>模拟失败日志</Btn>
+            <Btn sm ghost onClick={() => Taowo.logApi(a.id, true)}>模拟成功</Btn>
+            <Btn sm ghost onClick={() => Taowo.logApi(a.id, false)}>模拟失败日志</Btn>
           </div>
         </div>
       ))}
       <h2 style={{ fontSize: 20, margin: "28px 0 12px", fontWeight: 500 }}>同步任务</h2>
-      <DataTable columns={[{ key: "name", title: "任务" }, { key: "freq", title: "频率" }, { key: "last", title: "上次" }, { key: "result", title: "结果" }, { key: "op", title: "", render: (r) => <button onClick={() => Taovo.runSync(r.name)}>立即同步</button> }]} rows={s.syncJobs} />
+      <DataTable columns={[{ key: "name", title: "任务" }, { key: "freq", title: "频率" }, { key: "last", title: "上次" }, { key: "result", title: "结果" }, { key: "op", title: "", render: (r) => <button onClick={() => Taowo.runSync(r.name)}>立即同步</button> }]} rows={s.syncJobs} />
     </div>
   );
 }
@@ -595,13 +595,13 @@ function OrgOps({ s }) {
       <DataTable columns={[
         { key: "account", title: "账号" }, { key: "name", title: "姓名" }, { key: "org", title: "组织" }, { key: "role", title: "角色" },
         { key: "status", title: "状态", render: (r) => statusLabel(r.status) },
-        { key: "op", title: "", render: (r) => r.role.startsWith("dealer") ? null : <span><button onClick={() => Taovo.toggleUser(r.id)}>{r.status === "active" ? "停用" : "启用"}</button> <button onClick={() => Taovo.resetPassword(r.id)}>重置密码</button></span> },
+        { key: "op", title: "", render: (r) => r.role.startsWith("dealer") ? null : <span><button onClick={() => Taowo.toggleUser(r.id)}>{r.status === "active" ? "停用" : "启用"}</button> <button onClick={() => Taowo.resetPassword(r.id)}>重置密码</button></span> },
       ]} rows={s.users.filter((u) => !u.role.startsWith("dealer"))} />
       <div className="row" style={{ marginTop: 16 }}>
         <Field label="姓名"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
         <Field label="账号"><input value={account} onChange={(e) => setAccount(e.target.value)} /></Field>
         <Field label="组织"><select value={org} onChange={(e) => setOrg(e.target.value)}>{s.orgs.map((o) => <option key={o.id}>{o.name}</option>)}</select></Field>
-        <Btn sm onClick={() => Taovo.saveUser({ name, account, org, role: "ops_merch" })}>创建用户</Btn>
+        <Btn sm onClick={() => Taowo.saveUser({ name, account, org, role: "ops_merch" })}>创建用户</Btn>
       </div>
     </div>
   );
@@ -632,7 +632,7 @@ function RoleOps({ s }) {
               </label>
             ))}
           </div>
-          <Btn sm style={{ marginTop: 16 }} onClick={() => Taovo.saveRole({ ...cur, perms: picked })}>保存权限</Btn>
+          <Btn sm style={{ marginTop: 16 }} onClick={() => Taowo.saveRole({ ...cur, perms: picked })}>保存权限</Btn>
         </div>
       </div>
     </div>
@@ -658,10 +658,10 @@ function DictOps({ s }) {
   return (
     <div>
       <div className="hrow"><div><h1>基础参数</h1><p>订单状态、支付方式、筛选项、附件限制</p></div></div>
-      <Field label="订单状态"><input defaultValue={d.orderStatus.join("、")} onBlur={(e) => Taovo.saveDict("orderStatus", e.target.value.split("、"))} /></Field>
-      <Field label="支付方式"><input defaultValue={d.payMethods.join("、")} onBlur={(e) => Taovo.saveDict("payMethods", e.target.value.split("、"))} /></Field>
-      <Field label="商品筛选项（后台可调，前台列表读取）"><input defaultValue={d.filters.join("、")} onBlur={(e) => Taovo.saveDict("filters", e.target.value.split("、"))} /></Field>
-      <Field label="附件限制"><input defaultValue={d.attachLimit} onBlur={(e) => Taovo.saveDict("attachLimit", e.target.value)} /></Field>
+      <Field label="订单状态"><input defaultValue={d.orderStatus.join("、")} onBlur={(e) => Taowo.saveDict("orderStatus", e.target.value.split("、"))} /></Field>
+      <Field label="支付方式"><input defaultValue={d.payMethods.join("、")} onBlur={(e) => Taowo.saveDict("payMethods", e.target.value.split("、"))} /></Field>
+      <Field label="商品筛选项（后台可调，前台列表读取）"><input defaultValue={d.filters.join("、")} onBlur={(e) => Taowo.saveDict("filters", e.target.value.split("、"))} /></Field>
+      <Field label="附件限制"><input defaultValue={d.attachLimit} onBlur={(e) => Taowo.saveDict("attachLimit", e.target.value)} /></Field>
     </div>
   );
 }

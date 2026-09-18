@@ -38,8 +38,8 @@ function useHash() {
 }
 
 function useStore() {
-  const [s, setS] = useState(Taovo.get());
-  useEffect(() => Taovo.on(() => setS({ ...Taovo.get() })), []);
+  const [s, setS] = useState(Taowo.get());
+  useEffect(() => Taowo.on(() => setS({ ...Taowo.get() })), []);
   return s;
 }
 
@@ -69,7 +69,7 @@ function Empty({ title, text, action }) {
 }
 
 function Money(n) {
-  return "¥" + Number(n || 0).toLocaleString("zh-CN");
+  return "¥" + Number(n || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function statusLabel(s) {

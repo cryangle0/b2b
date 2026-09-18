@@ -9,7 +9,7 @@ function MallNav({ s, path }) {
   const hrefOf = (name) => (/期货/.test(name) ? "/shop/futures" : /订货/.test(name) ? "/fair" : "/shop/spot");
   return (
     <header className="top">
-      <a className="logo" href="#/">TAOVO<span>Order</span></a>
+      <a className="logo" href="#/">TAOWO<span>Order</span></a>
       <nav className="nav">
         {names.map((n) => {
           const href = hrefOf(n);
@@ -46,24 +46,49 @@ function MallTab({ path }) {
   );
 }
 
-function ProductCard({ p }) {
-  const expired = Taovo.isExpired(p);
-  const can = Taovo.canOrder(p);
+function productTitle(p) {
+  const g = p.gender === "中性" ? "中性" : p.gender + "款";
+  return [p.ip, p.brand, g, p.nameZh, p.name].filter(Boolean).join(" ") + (p.colorName ? " - " + p.colorName : "");
+}
+
+function Stars({ rating, reviews }) {
+  const r = Number(rating || 0);
+  const full = Math.round(r);
+  return (
+    <div className="stars">
+      <span aria-hidden="true">{"★★★★★".slice(0, full)}{"☆☆☆☆☆".slice(0, 5 - full)}</span>
+      <b>{r.toFixed(1)}</b>
+      {reviews ? <em>({reviews})</em> : null}
+    </div>
+  );
+}
+
+function ProductCard({ p, s }) {
+  const expired = Taowo.isExpired(p);
+  const can = Taowo.canOrder(p);
   const stock = Object.values(p.stock || {}).reduce((n, v) => n + (Number(v) || 0), 0);
   const label = !can ? (expired ? "不可订购" : "暂不可订") : stock <= 0 ? "缺货" : Money(p.price);
+  const flag = expired ? "已过期" : p.status === "off" ? "下架" : !can ? "暂不可订" : stock <= 0 ? "缺货" : p.badge || (p.fair ? "订货会" : "");
+  const fav = s && s.favorites && s.favorites.includes(p.id);
   return (
-    <a className="card" href={"#/p/" + p.id}>
-      <div className="pic">
+    <a className="pcard" href={"#/p/" + p.id}>
+      <div className="pcard-pic" style={{ background: p.color || "#e8e8e8" }}>
         <Photo src={productThumb(p)} alt={p.name} color={p.color} />
-        {p.fair && <span className="tag">订货会</span>}
-        {expired && <span className="tag">已过期</span>}
-        {p.status === "off" && <span className="tag">下架</span>}
-        {can && stock <= 0 && <span className="tag">缺货</span>}
+        {s && (
+          <button className={"pcard-heart" + (fav ? " on" : "")} title="收藏" onClick={(e) => { e.preventDefault(); Taowo.toggleFav(p.id); }}>
+            <Icon name="heart" size={18} />
+          </button>
+        )}
       </div>
-      <div className="meta">
-        <strong>{p.name}</strong>
-        <em>{p.nameZh} · {p.wave} 波 · {p.type === "futures" ? "期货" : "现货"}{stock > 0 ? " · 可订 " + stock : ""}</em>
-        <b className={can && stock > 0 ? "" : "sold"}>{label}</b>
+      <div className="pcard-body">
+        {(p.colors || []).length > 1 && (
+          <div className="swatches">
+            {p.colors.map((c) => <i key={c.name} style={{ background: c.hex }} title={c.name} />)}
+          </div>
+        )}
+        <strong>{productTitle(p)}</strong>
+        <b className={can && stock > 0 ? "pcard-price" : "pcard-price sold"}>{label}</b>
+        {flag ? <span className="pcard-flag">{flag}</span> : null}
       </div>
     </a>
   );
@@ -81,6 +106,27 @@ function HomeView({ s }) {
   const fair = s.products.filter((p) => p.fair);
   return (
     <div>
+      <div className="shop-teams wrap">
+        <div className="shop-teams-copy">
+          <b>选分类</b>
+          <a href="#/shop/spot">全部商品</a>
+        </div>
+        <div className="shop-teams-row">
+          {[
+            { t: "现货", href: "/shop/spot", tone: "#111" },
+            { t: "期货", href: "/shop/futures", tone: "#1f3d2b" },
+            { t: "订货会", href: "/fair", tone: "#8a1c1c" },
+            { t: "鞋履", href: "/shop/spot", tone: "#3949ab" },
+            { t: "服装", href: "/shop/spot", tone: "#6b7280" },
+            { t: "配件", href: "/shop/spot", tone: "#2e3a46" },
+          ].map((c) => (
+            <a className="team-dot" key={c.t} href={"#" + c.href}>
+              <span style={{ background: c.tone }}>{c.t.slice(0, 1)}</span>
+              {c.t}
+            </a>
+          ))}
+        </div>
+      </div>
       <section className="hero">
         <img src={h.img} alt="" onError={(e) => { e.target.style.display = "none"; }} />
         <div className="copy">
@@ -90,18 +136,6 @@ function HomeView({ s }) {
         </div>
         <div className="hero-dots">{heroes.map((_, n) => <i key={n} className={n === i ? "on" : ""} />)}</div>
       </section>
-      <div className="section wrap">
-        <h2>分类</h2>
-        <div className="cats">
-          {[
-            { t: "现货", img: s.images.runner, href: "/shop/spot" },
-            { t: "期货", img: s.images.trail, href: "/shop/futures" },
-            { t: "订货会", img: s.images.fair, href: "/fair" },
-          ].map((c) => (
-            <a className="cat" key={c.t} href={"#" + c.href}><Photo src={c.img} alt={c.t} color="#111" /><b>{c.t}</b></a>
-          ))}
-        </div>
-      </div>
       <a className="fairband" href="#/fair">
         <img src={s.images.floor} alt="" />
         <div className="copy">
@@ -111,11 +145,11 @@ function HomeView({ s }) {
       </a>
       <div className="section wrap">
         <h2>现货速发</h2>
-        <div className="grid">{spot.slice(0, 4).map((p) => <ProductCard key={p.id} p={p} />)}</div>
+        <div className="plp-grid">{spot.slice(0, 6).map((p) => <ProductCard key={p.id} p={p} s={s} />)}</div>
       </div>
       <div className="section wrap" style={{ paddingBottom: 80 }}>
         <h2>订货会商品</h2>
-        <div className="grid">{fair.slice(0, 4).map((p) => <ProductCard key={p.id} p={p} />)}</div>
+        <div className="plp-grid">{fair.slice(0, 6).map((p) => <ProductCard key={p.id} p={p} s={s} />)}</div>
       </div>
     </div>
   );
@@ -127,8 +161,22 @@ function ShopView({ s, type, fair, query }) {
     q: query.q || "",
     brand: "", ip: "", cat: "", sub: "", wave: "", season: "", gender: "",
   });
-  const list = filterProducts(s.products, { type, fair, ...f });
+  const [sort, setSort] = useState("hot");
+  let list = filterProducts(s.products, { type, fair, ...f });
+  if (sort === "low") list = [...list].sort((a, b) => a.price - b.price);
+  if (sort === "high") list = [...list].sort((a, b) => b.price - a.price);
+  if (sort === "new") list = [...list].sort((a, b) => (b.badge === "新品") - (a.badge === "新品"));
   const enabled = dict.filters;
+  const title = fair ? "订货会" : type === "futures" ? "期货" : "现货";
+  const chips = [
+    f.brand && ["brand", f.brand],
+    f.ip && ["ip", f.ip],
+    f.cat && ["cat", f.cat],
+    f.sub && ["sub", f.sub],
+    f.wave && ["wave", f.wave],
+    f.season && ["season", f.season],
+    f.gender && ["gender", f.gender],
+  ].filter(Boolean);
   function toggle(key, val) {
     setF((x) => ({ ...x, [key]: x[key] === val ? "" : val }));
   }
@@ -137,34 +185,52 @@ function ShopView({ s, type, fair, query }) {
     const header = ["图片1", "图片2", "款号", "名称", "波次", ...sizes, "合计"].join(",");
     const rows = list.map((p) => [p.images[0], p.images[1] || p.images[0], p.id, p.name, p.wave, ...sizes.map(() => ""), ""].join(","));
     downloadText("订购模板-" + (type || "fair") + ".csv", [header, ...rows].join("\n"), "text/csv");
-    Taovo.toast("已导出含图片链接、波次、尺码列的模板");
+    Taowo.toast("已导出含图片链接、波次、尺码列的模板");
   }
   return (
-    <div className="wrap split">
-      <aside className="filters">
+    <div className="plp wrap">
+      <aside className="plp-side">
+        <div className="plp-brand">{title}</div>
+        {chips.length > 0 && (
+          <div className="plp-sel">
+            <h3>已选</h3>
+            <div className="sel-chips">
+              {chips.map(([k, v]) => (
+                <button key={k} onClick={() => toggle(k, v)}>{v} ×</button>
+              ))}
+            </div>
+          </div>
+        )}
+        <label className="plp-sort">
+          <span>排序</span>
+          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+            <option value="hot">热销</option>
+            <option value="new">新品</option>
+            <option value="low">价格从低到高</option>
+            <option value="high">价格从高到低</option>
+          </select>
+        </label>
         <Field label="款号 / 名称">
           <input value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} placeholder="TW-1001" />
         </Field>
         {enabled.includes("品牌") && <FilterGroup open title="品牌" items={dict.brands} value={f.brand} onChange={(v) => toggle("brand", v)} />}
-        {enabled.includes("IP") && <FilterGroup title="IP" items={dict.ips} value={f.ip} onChange={(v) => toggle("ip", v)} />}
+        {enabled.includes("IP") && <FilterGroup open title="系列" items={dict.ips} value={f.ip} onChange={(v) => toggle("ip", v)} />}
         {enabled.includes("大类") && <FilterGroup open title="大类" items={dict.cats} value={f.cat} onChange={(v) => toggle("cat", v)} />}
         {enabled.includes("小类") && <FilterGroup title="小类" items={dict.subs} value={f.sub} onChange={(v) => toggle("sub", v)} />}
         {enabled.includes("波次") && <FilterGroup title="波次" items={dict.waves} value={f.wave} onChange={(v) => toggle("wave", v)} />}
         {enabled.includes("季节") && <FilterGroup title="季节" items={dict.seasons} value={f.season} onChange={(v) => toggle("season", v)} />}
         {enabled.includes("性别") && <FilterGroup title="性别" items={dict.genders} value={f.gender} onChange={(v) => toggle("gender", v)} />}
-        <div className="row" style={{ marginTop: 16 }}>
-          <Btn sm ghost onClick={exportTpl}>导出订购模板</Btn>
-          <Btn sm ghost onClick={() => go("/import")}>导入 Excel</Btn>
+        <div className="plp-tools">
+          <button onClick={exportTpl}>导出订购模板</button>
+          <button onClick={() => go("/import")}>导入 Excel</button>
         </div>
       </aside>
-      <div>
-        <div className="hrow">
-          <div>
-            <h1>{fair ? "订货会" : type === "futures" ? "期货" : "现货"}</h1>
-            <p>{list.length} 款 · 库存状态按可订量显示</p>
-          </div>
+      <div className="plp-main">
+        <div className="plp-bar">
+          <span className="plp-countbox">{list.length} 款</span>
+          <span className="plp-range">1 – {list.length} / {list.length}</span>
         </div>
-        {list.length ? <div className="grid">{list.map((p) => <ProductCard key={p.id} p={p} />)}</div> : <Empty title="没有匹配商品" text="清空筛选，或发起求购。" action={<Btn ghost onClick={() => go("/request")}>求购</Btn>} />}
+        {list.length ? <div className="plp-grid">{list.map((p) => <ProductCard key={p.id} p={p} s={s} />)}</div> : <Empty title="没有匹配商品" text="清空筛选，或发起求购。" action={<Btn ghost onClick={() => go("/request")}>求购</Btn>} />}
       </div>
     </div>
   );
@@ -172,7 +238,7 @@ function ShopView({ s, type, fair, query }) {
 
 function FilterGroup({ title, items, value, onChange, open }) {
   return (
-    <details open={open}>
+    <details className="plp-filter" open={open}>
       <summary><h3>{title}</h3></summary>
       {items.map((it) => (
         <label key={it}><input type="checkbox" checked={value === it} onChange={() => onChange(it)} />{it}</label>
@@ -184,70 +250,131 @@ function FilterGroup({ title, items, value, onChange, open }) {
 function PdpView({ s, id }) {
   const p = s.products.find((x) => x.id === id);
   const [qty, setQty] = useState({});
+  const [size, setSize] = useState("");
+  const [n, setN] = useState(1);
   const [img, setImg] = useState(0);
   const [buy, setBuy] = useState(false);
+  const [open, setOpen] = useState("desc");
   const [addr, setAddr] = useState(s.addresses.find((a) => a.def)?.line || s.addresses[0]?.line || "");
   if (!p) return <Empty title="商品不存在" text="返回列表" action={<Btn onClick={() => go("/shop/spot")}>现货</Btn>} />;
-  const can = Taovo.canOrder(p);
-  const expired = Taovo.isExpired(p);
+  const can = Taowo.canOrder(p);
+  const expired = Taowo.isExpired(p);
   const total = Object.values(qty).reduce((n, v) => n + (Number(v) || 0), 0);
+  const bagQty = total || (size && n ? n : 0);
+  function bagMap() {
+    if (total) return qty;
+    if (!size) return {};
+    return { [size]: n };
+  }
   return (
-    <div className="pdp">
-      <div className="pdp-gallery">
-        {p.images.map((src, i) => <Photo key={i} src={src} alt={p.name} color={p.color} />)}
+    <div className="pdp-page wrap">
+      <div className="crumb">
+        <a href="#/shop/spot">现货</a> / <a href={"#/shop/" + (p.type === "futures" ? "futures" : "spot")}>{p.cat}</a> / {p.id}
       </div>
-      <div className="pdp-buy">
-        <div className="eyebrow">{p.brand} · {p.ip} · {p.season} · {p.wave} 波</div>
-        <h1>{p.name}</h1>
-        <div className="muted">{p.nameZh} · {p.id}</div>
-        <div className="price">{Money(p.price)} <span className="muted">建议零售 {Money(p.retail)}</span></div>
-        <div className="kvs">
-          <i>交期</i><b>{p.lead}</b>
-          <i>仓库</i><b>{p.warehouse}</b>
-          {p.type === "futures" && <><i>有效期</i><b>{p.validFrom} — {p.validTo}{expired ? "（已过期）" : ""}</b></>}
+      <div className="pdp">
+        <div className="pdp-media">
+          <div className="pdp-thumbs">
+            {p.images.map((src, i) => (
+              <button key={i} className={img === i ? "on" : ""} onClick={() => setImg(i)}>
+                <Photo src={src} alt="" color={p.color} />
+              </button>
+            ))}
+          </div>
+          <div className="pdp-hero" style={{ background: p.color || "#e8e8e8" }}>
+            <Photo src={p.images[img] || p.images[0]} alt={p.name} color={p.color} />
+          </div>
         </div>
-        <hr className="line" />
-        <div className="muted" style={{ marginBottom: 8 }}>同一款可同时填写多个尺码</div>
-        <div className="sizegrid">
-          {p.sizes.map((sz) => {
-            const st = p.stock[sz] || 0;
-            return (
-              <div className={"size " + (st <= 0 ? "off" : "")} key={sz}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}><b>{sz}</b><span className="muted">{st ? "可订 " + st : "缺货"}</span></div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  disabled={!can || st <= 0}
-                  value={qty[sz] || ""}
-                  placeholder=""
-                  onChange={(e) => setQty({ ...qty, [sz]: e.target.value.replace(/[^\d]/g, "") })}
-                />
+        <div className="pdp-buy">
+          <h1>{productTitle(p)}</h1>
+          <Stars rating={p.rating} reviews={p.reviews} />
+          <div className="stockline">{can ? "有货 — " + p.lead : (expired ? "期货已过期，不可订购" : "当前不可订购")}</div>
+          <div className="your-price"><span>经销价</span> {Money(p.price)}</div>
+          <div className="muted">建议零售 {Money(p.retail)} · {p.warehouse}</div>
+          {(p.colors || []).length > 0 && (
+            <div className="pdp-colors">
+              <span>颜色</span>
+              <div className="swatches lg">
+                {p.colors.map((c) => <i key={c.name} className={c.name === p.colorName ? "on" : ""} style={{ background: c.hex }} title={c.name} />)}
               </div>
-            );
-          })}
+            </div>
+          )}
+          <div className="size-head"><span>尺码</span><button className="linkish" onClick={() => Taowo.toast("鞋码 36–45 · 服装 XS–XXL")}>尺码表</button></div>
+          <div className="szchips">
+            {p.sizes.map((sz) => {
+              const st = p.stock[sz] || 0;
+              return (
+                <button
+                  key={sz}
+                  disabled={!can || st <= 0}
+                  className={"szchip " + (size === sz ? "on" : "") + (st <= 0 ? " off" : "")}
+                  onClick={() => setSize(sz)}
+                >{sz}</button>
+              );
+            })}
+          </div>
+          <label className="qty-row">
+            <span>数量</span>
+            <select value={n} onChange={(e) => setN(Number(e.target.value))}>
+              {[1, 2, 3, 4, 5, 6, 8, 10, 12, 24].map((x) => <option key={x} value={x}>{x}</option>)}
+            </select>
+          </label>
+          <details className="multi-size">
+            <summary>一次填多码（批发）</summary>
+            <div className="sizegrid">
+              {p.sizes.map((sz) => {
+                const st = p.stock[sz] || 0;
+                return (
+                  <div className={"size " + (st <= 0 ? "off" : "")} key={sz}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}><b>{sz}</b><span className="muted">{st ? "可订 " + st : "缺货"}</span></div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      disabled={!can || st <= 0}
+                      value={qty[sz] || ""}
+                      onChange={(e) => setQty({ ...qty, [sz]: e.target.value.replace(/[^\d]/g, "") })}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+          <Btn block disabled={!can || !bagQty} onClick={() => Taowo.addToBag(p.id, bagMap())}>加入购物袋{bagQty ? " · " + bagQty + " 件" : ""}</Btn>
+          <div style={{ marginTop: 10 }}>
+            <Btn ghost block disabled={!can || !bagQty} onClick={() => setBuy(true)}>立即下单</Btn>
+          </div>
+          <div className="pdp-assures">授权货盘 · 审核后发货 · 缺货可加入心愿单</div>
+          <div className="row" style={{ marginTop: 12 }}>
+            <Btn ghost sm onClick={() => Taowo.toggleFav(p.id)}>{s.favorites.includes(p.id) ? "已收藏" : "收藏"}</Btn>
+            <Btn ghost sm onClick={() => Taowo.addWish(p.id, size || p.sizes.find((sz) => (p.stock[sz] || 0) <= 0) || p.sizes[0])}>缺货心愿单</Btn>
+            <Btn ghost sm onClick={() => go("/request")}>求购</Btn>
+          </div>
+          {buy && (
+            <Modal title="提交订购单" onClose={() => setBuy(false)} footer={<Btn block onClick={() => {
+              const lines = Object.entries(bagMap()).filter(([, v]) => Number(v) > 0).map(([sz, qn]) => ({ pid: p.id, size: sz, qty: Number(qn), price: p.price }));
+              const o = Taowo.submitOrder({ address: addr, lines, type: p.type, remark: "详情页直接下单" });
+              if (o) go("/orders/" + o.id);
+            }}>确认提交</Btn>}>
+              <Field label="地址"><input value={addr} onChange={(e) => setAddr(e.target.value)} /></Field>
+              <p className="muted">{bagQty} 件 · {Money(p.price * bagQty)} · 提交后进入审核</p>
+            </Modal>
+          )}
+          <div className="acc">
+            <button className={open === "desc" ? "on" : ""} onClick={() => setOpen(open === "desc" ? "" : "desc")}>描述</button>
+            {open === "desc" && <p>{p.desc}</p>}
+            <button className={open === "detail" ? "on" : ""} onClick={() => setOpen(open === "detail" ? "" : "detail")}>细节</button>
+            {open === "detail" && (
+              <ul>
+                <li>款号 {p.id}</li>
+                <li>品牌 {p.brand}</li>
+                <li>系列 {p.ip} · {p.series}</li>
+                <li>季节 {p.season} · 波次 {p.wave}</li>
+                {p.type === "futures" && <li>有效期 {p.validFrom} — {p.validTo}{expired ? "（已过期）" : ""}</li>}
+              </ul>
+            )}
+            <button className={open === "ship" ? "on" : ""} onClick={() => setOpen(open === "ship" ? "" : "ship")}>交期</button>
+            {open === "ship" && <p>{p.lead}，仓库 {p.warehouse}。现货与期货将拆单审核。</p>}
+          </div>
         </div>
-        <div className="row">
-          <Btn block disabled={!can || !total} onClick={() => Taovo.addToBag(p.id, qty)}>加入购物袋 · {total} 件</Btn>
-        </div>
-        <div className="row" style={{ marginTop: 10 }}>
-          <Btn ghost block disabled={!can || !total} onClick={() => setBuy(true)}>立即下单</Btn>
-        </div>
-        <div className="row" style={{ marginTop: 10 }}>
-          <Btn ghost sm onClick={() => Taovo.toggleFav(p.id)}>{s.favorites.includes(p.id) ? "已收藏" : "收藏"}</Btn>
-          <Btn ghost sm onClick={() => Taovo.addWish(p.id, p.sizes.find((sz) => (p.stock[sz] || 0) <= 0) || p.sizes[0])}>缺货心愿单</Btn>
-          <Btn ghost sm onClick={() => go("/request")}>求购</Btn>
-        </div>
-        {buy && (
-          <Modal title="提交订购单" onClose={() => setBuy(false)} footer={<Btn block onClick={() => {
-            const lines = Object.entries(qty).filter(([, v]) => Number(v) > 0).map(([size, qn]) => ({ pid: p.id, size, qty: Number(qn), price: p.price }));
-            const o = Taovo.submitOrder({ address: addr, lines, type: p.type, remark: "详情页直接下单" });
-            if (o) go("/orders/" + o.id);
-          }}>确认提交</Btn>}>
-            <Field label="地址"><input value={addr} onChange={(e) => setAddr(e.target.value)} /></Field>
-            <p className="muted">{total} 件 · {Money(p.price * total)} · 提交后进入审核</p>
-          </Modal>
-        )}
-        <p style={{ marginTop: 28, color: "#555", lineHeight: 1.6 }}>{p.desc}</p>
       </div>
     </div>
   );
@@ -258,30 +385,30 @@ function BagView({ s }) {
   const [addr, setAddr] = useState(s.addresses.find((a) => a.def)?.id || s.addresses[0]?.id);
   const [remark, setRemark] = useState("");
   const selected = items.filter((c) => c.selected !== false);
-  const amount = Taovo.lineAmount(selected);
-  const promo = Taovo.applyPromo(amount, selected);
+  const amount = Taowo.lineAmount(selected);
+  const promo = Taowo.applyPromo(amount, selected);
   if (!items.length) return <div className="bagpage"><Empty title="购物袋是空的" text="从现货、期货或订货会加入尺码。" action={<Btn onClick={() => go("/shop/spot")}>去订货</Btn>} /></div>;
   return (
     <div className="bagpage">
       <h1 style={{ fontSize: 40, fontWeight: 400, letterSpacing: "-0.04em", marginBottom: 24 }}>袋</h1>
       <div className="row" style={{ marginBottom: 12 }}>
-        <Btn sm ghost onClick={() => Taovo.selectAllCart(true)}>全选</Btn>
-        <Btn sm ghost onClick={() => Taovo.removeSelectedCart()}>删除所选</Btn>
+        <Btn sm ghost onClick={() => Taowo.selectAllCart(true)}>全选</Btn>
+        <Btn sm ghost onClick={() => Taowo.removeSelectedCart()}>删除所选</Btn>
       </div>
       {items.map((c) => {
-        const p = Taovo.product(c.pid);
+        const p = Taowo.product(c.pid);
         return (
           <div key={c.pid + c.size} style={{ display: "grid", gridTemplateColumns: "28px 120px 1fr auto", gap: 16, padding: "18px 0", borderBottom: "1px solid var(--line)", alignItems: "center" }}>
-            <input type="checkbox" checked={c.selected !== false} onChange={() => Taovo.toggleSelectCart(c.pid, c.size)} />
+            <input type="checkbox" checked={c.selected !== false} onChange={() => Taowo.toggleSelectCart(c.pid, c.size)} />
             <Photo src={productThumb(p)} alt={p?.name} color={p?.color} />
             <div>
               <strong>{p?.name}</strong>
               <div className="muted">{c.pid} · {c.size} · {p?.type === "futures" ? "期货" : "现货"}</div>
-              <div style={{ marginTop: 10 }}><Qty value={c.qty} max={p?.stock[c.size] || c.qty} onChange={(v) => Taovo.setCartQty(c.pid, c.size, v)} /></div>
+              <div style={{ marginTop: 10 }}><Qty value={c.qty} max={p?.stock[c.size] || c.qty} onChange={(v) => Taowo.setCartQty(c.pid, c.size, v)} /></div>
             </div>
             <div className="right nowrap">
               <div>{Money(c.price * c.qty)}</div>
-              <button className="iconbtn nowrap" onClick={() => Taovo.removeCart(c.pid, c.size)}>删除</button>
+              <button className="iconbtn nowrap" onClick={() => Taowo.removeCart(c.pid, c.size)}>删除</button>
             </div>
           </div>
         );
@@ -303,12 +430,12 @@ function BagView({ s }) {
             <i>应付</i><b>{Money(promo.pay)}</b>
           </div>
           <div className="muted" style={{ margin: "8px 0 16px" }}>{promo.label.join(" · ") || "无活动"}</div>
-          {selected.some((c) => Taovo.product(c.pid)?.type === "futures") && selected.some((c) => Taovo.product(c.pid)?.type !== "futures") && (
+          {selected.some((c) => Taowo.product(c.pid)?.type === "futures") && selected.some((c) => Taowo.product(c.pid)?.type !== "futures") && (
             <p className="muted">现货与期货将拆成两张订购单分别审核。</p>
           )}
           <Btn block onClick={() => {
             const a = s.addresses.find((x) => x.id === addr);
-            const o = Taovo.submitOrder({ address: a?.line, remark });
+            const o = Taowo.submitOrder({ address: a?.line, remark });
             if (o) go("/orders/" + o.id);
           }}>提交订购单</Btn>
           <p className="muted" style={{ marginTop: 10 }}>提交后需品牌方审核，审核通过再生效。</p>
@@ -337,7 +464,7 @@ function ImportView({ s }) {
         r.readAsText(f);
       }} />
       <div className="row" style={{ margin: "16px 0" }}>
-        <Btn onClick={() => Taovo.parseImport(text)}>解析</Btn>
+        <Btn onClick={() => Taowo.parseImport(text)}>解析</Btn>
         <Btn ghost onClick={() => go("/shop/spot")}>先导出模板</Btn>
       </div>
       {preview && (
@@ -349,7 +476,7 @@ function ImportView({ s }) {
               {preview.rows.map((r, i) => (
                 <tr key={i}>
                   <td>{r.pid}</td><td>{r.size}</td>
-                  <td><Qty value={r.qty} onChange={(v) => Taovo.setImportQty(i, v)} /></td>
+                  <td><Qty value={r.qty} onChange={(v) => Taowo.setImportQty(i, v)} /></td>
                   <td className="muted">{r.formula || "—"}</td>
                   <td>{Money(r.price)}</td>
                 </tr>
@@ -358,7 +485,7 @@ function ImportView({ s }) {
           </table>
           <Field label="地址"><input value={addr} onChange={(e) => setAddr(e.target.value)} /></Field>
           <Btn onClick={() => {
-            const o = Taovo.submitOrder({ address: addr, lines: preview.rows, remark: "Excel 导入" });
+            const o = Taowo.submitOrder({ address: addr, lines: preview.rows, remark: "Excel 导入" });
             if (o) go("/orders/" + o.id);
           }}>提交审核</Btn>
         </div>
@@ -396,7 +523,7 @@ function OrdersView({ s, id }) {
             return a + " / " + (b - a);
           }},
           { key: "created", title: "下单" },
-          { key: "amt", title: "金额", render: (r) => Money(Taovo.lineAmount(r.lines)) },
+          { key: "amt", title: "金额", render: (r) => Money(Taowo.lineAmount(r.lines)) },
         ]}
         rows={rows}
       />
@@ -416,7 +543,7 @@ function OrderDetail({ s, id }) {
     const lines = o.lines.map((l) => [o.id, l.pid, l.size, l.qty, l.shipped || 0, l.price].join(",")).join("\n");
     if (kind === "csv") downloadText(o.id + ".csv", "单号,款号,尺码,数量,已发,单价\n" + lines, "text/csv");
     else window.print();
-    Taovo.toast("已生成 " + (kind === "csv" ? "Excel" : "PDF 打印"));
+    Taowo.toast("已生成 " + (kind === "csv" ? "Excel" : "PDF 打印"));
   }
   return (
     <div className="wrap" style={{ padding: "32px 0 80px", maxWidth: 980 }}>
@@ -442,7 +569,7 @@ function OrderDetail({ s, id }) {
         <thead><tr><th>款</th><th>尺码</th><th>数量</th><th>已发</th><th>单价</th></tr></thead>
         <tbody>
           {o.lines.map((l, i) => {
-            const p = Taovo.product(l.pid);
+            const p = Taowo.product(l.pid);
             return <tr key={i}><td>{p?.name} {l.pid}</td><td>{l.size}</td><td>{l.qty}</td><td>{l.shipped || 0}</td><td>{Money(l.price)}</td></tr>;
           })}
         </tbody>
@@ -460,7 +587,7 @@ function OrderDetail({ s, id }) {
       <h2 style={{ margin: "28px 0 12px", fontSize: 20, fontWeight: 500 }}>轨迹</h2>
       {o.history.map((h, i) => <div key={i} className="muted">{h.t} · {h.e}</div>)}
       {pay && (
-        <Modal title="支付" onClose={() => setPay(false)} footer={<Btn block onClick={() => { Taovo.payOrder(o.id, channel); setPay(false); }}>确认{channel}</Btn>}>
+        <Modal title="支付" onClose={() => setPay(false)} footer={<Btn block onClick={() => { Taowo.payOrder(o.id, channel); setPay(false); }}>确认{channel}</Btn>}>
           <div className="chips">
             {(window.innerWidth < 960 ? ["微信支付"] : ["微信支付", "支付宝", "对公转账"]).map((m) => <button className={"chip " + (channel === m ? "on" : "")} key={m} onClick={() => setChannel(m)}>{m}</button>)}
           </div>
@@ -495,11 +622,11 @@ function AccountView({ s }) {
       <p className="muted">{s.session.org} · {s.session.account}</p>
       <Field label="显示名"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
       <Field label="修改密码"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="留空则不改" /></Field>
-      <Btn sm onClick={() => Taovo.updateProfile(password ? { name, password } : { name })}>保存账号</Btn>
+      <Btn sm onClick={() => Taowo.updateProfile(password ? { name, password } : { name })}>保存账号</Btn>
       <div style={{ marginTop: 28 }}>
         {items.map(([n, h]) => <a key={h} href={"#" + h} style={{ display: "block", padding: "18px 0", borderBottom: "1px solid var(--line)", fontSize: 18 }}>{n}</a>)}
       </div>
-      <div style={{ marginTop: 28 }}><Btn ghost onClick={() => { Taovo.logout(); go("/login"); }}>退出</Btn></div>
+      <div style={{ marginTop: 28 }}><Btn ghost onClick={() => { Taowo.logout(); go("/login"); }}>退出</Btn></div>
     </div>
   );
 }
@@ -509,10 +636,10 @@ function HeartView({ s }) {
   return (
     <div className="wrap" style={{ padding: "32px 0 80px" }}>
       <h1 style={{ fontSize: 36, fontWeight: 400, marginBottom: 20 }}>收藏</h1>
-      <div className="grid">{favs.map((p) => <ProductCard key={p.id} p={p} />)}</div>
+      <div className="plp-grid">{favs.map((p) => <ProductCard key={p.id} p={p} s={s} />)}</div>
       <h2 style={{ fontSize: 24, margin: "40px 0 12px", fontWeight: 400 }}>心愿单</h2>
       {s.wishlist.length ? s.wishlist.map((w, i) => {
-        const p = Taovo.product(w.pid);
+        const p = Taowo.product(w.pid);
         return (
           <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--line)" }}>
             <div>{p?.name} · {w.size}<div className="muted">{w.note}</div></div>
@@ -541,14 +668,14 @@ function CompanyView({ s }) {
       {main ? (
         <>
           <Field label="认证地址 / 资料"><input value={cert} onChange={(e) => setCert(e.target.value)} /></Field>
-          <Btn sm onClick={() => Taovo.saveDealer(dealer.id, { address: cert, cert: "已认证" })}>保存企业信息</Btn>
+          <Btn sm onClick={() => Taowo.saveDealer(dealer.id, { address: cert, cert: "已认证" })}>保存企业信息</Btn>
           <section className="section-block">
             <h2>子账号</h2>
-            <DataTable columns={[{ key: "name", title: "姓名" }, { key: "account", title: "账号" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }, { key: "op", title: "", render: (r) => <button onClick={(e) => { e.stopPropagation(); Taovo.toggleUser(r.id); }}>{r.status === "active" ? "停用" : "启用"}</button> }]} rows={subs} />
+            <DataTable columns={[{ key: "name", title: "姓名" }, { key: "account", title: "账号" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }, { key: "op", title: "", render: (r) => <button onClick={(e) => { e.stopPropagation(); Taowo.toggleUser(r.id); }}>{r.status === "active" ? "停用" : "启用"}</button> }]} rows={subs} />
             <div className="form-grid">
               <Field label="姓名"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
               <Field label="账号"><input value={form.account} onChange={(e) => setForm({ ...form, account: e.target.value })} /></Field>
-              <Btn sm onClick={() => Taovo.addSub(form.name, form.account)}>创建子账号</Btn>
+              <Btn sm onClick={() => Taowo.addSub(form.name, form.account)}>创建子账号</Btn>
             </div>
           </section>
         </>
@@ -574,7 +701,7 @@ function RequestView({ s }) {
       <h1 style={{ fontSize: 36, fontWeight: 400 }}>求购</h1>
       <Field label="缺少或未上架的商品"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
       <Field label="说明"><textarea value={form.detail} onChange={(e) => setForm({ ...form, detail: e.target.value })} /></Field>
-      <Btn onClick={() => Taovo.addRequest(form)}>提交求购单</Btn>
+      <Btn onClick={() => Taowo.addRequest(form)}>提交求购单</Btn>
       <div style={{ marginTop: 32 }}>
         <DataTable columns={[{ key: "id", title: "单号" }, { key: "title", title: "需求" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }, { key: "reply", title: "回写" }]} rows={mine} />
       </div>
@@ -595,7 +722,7 @@ function ReturnView({ s }) {
         <select value={orderId} onChange={(e) => setOrderId(e.target.value)}>{mine.map((x) => <option key={x.id}>{x.id}</option>)}</select>
       </Field>
       <Field label="原因"><input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
-      <Btn onClick={() => Taovo.addReturn({ orderId, reason, lines: o ? [{ pid: o.lines[0].pid, size: o.lines[0].size, qty: 1 }] : [] })}>提交申请</Btn>
+      <Btn onClick={() => Taowo.addReturn({ orderId, reason, lines: o ? [{ pid: o.lines[0].pid, size: o.lines[0].size, qty: 1 }] : [] })}>提交申请</Btn>
       <div style={{ marginTop: 28 }}>
         <DataTable columns={[{ key: "id", title: "退货单" }, { key: "orderId", title: "订单" }, { key: "reason", title: "原因" }, { key: "status", title: "状态", render: (r) => statusLabel(r.status) }]} rows={list} />
       </div>
@@ -619,7 +746,7 @@ function MediaView({ s }) {
             a.target = "_blank";
             a.click();
           });
-          Taovo.toast("已开始下载 " + rows.length + " 个文件");
+          Taowo.toast("已开始下载 " + rows.length + " 个文件");
         }}>批量下载</Btn>
       </div>
       <div className="row">
@@ -649,7 +776,7 @@ function ApplyView() {
           <input value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
         </Field>
       ))}
-      <Btn onClick={() => { Taovo.applyDealer(f); go("/login"); }}>提交申请</Btn>
+      <Btn onClick={() => { Taowo.applyDealer(f); go("/login"); }}>提交申请</Btn>
     </div>
   );
 }
@@ -657,7 +784,7 @@ function ApplyView() {
 function LoginView({ portal }) {
   const [account, setAccount] = useState(portal === "ops" ? "admin" : "dealer");
   const [password, setPassword] = useState("123456");
-  const img = window.TAOVO_SEED.images.hero;
+  const img = window.TAOWO_SEED.images.hero;
   useEffect(() => {
     document.documentElement.classList.add("lock");
     document.body.classList.add("lock");
@@ -674,12 +801,12 @@ function LoginView({ portal }) {
       </div>
       <div className="login-form">
         <div className="box">
-          <div className="logo" style={{ marginBottom: 32 }}>TAOVO<span>{portal === "ops" ? "Ops" : "Order"}</span></div>
+          <div className="logo" style={{ marginBottom: 32 }}>TAOWO<span>{portal === "ops" ? "Ops" : "Order"}</span></div>
           <Field label="账号"><input value={account} onChange={(e) => setAccount(e.target.value)} /></Field>
           <Field label="密码"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
           <Btn block onClick={() => {
-            const r = Taovo.login(account, password, portal);
-            if (!r.ok) return Taovo.toast(r.msg, "err");
+            const r = Taowo.login(account, password, portal);
+            if (!r.ok) return Taowo.toast(r.msg, "err");
             go(portal === "ops" ? "/ops" : "/");
           }}>{portal === "ops" ? "进入后台" : "进入订货台"}</Btn>
           <div className="accounts">
@@ -741,9 +868,9 @@ function MallApp({ s, path, parts, query }) {
   else if (path === "/request") body = <RequestView s={s} />;
   else if (path === "/returns") body = <ReturnView s={s} />;
   else if (path === "/media") body = <MediaView s={s} />;
-  else if (path === "/contracts") body = <SimpleList title="合同" rows={s.contracts.filter((c) => c.dealerId === s.session.dealerId)} columns={[{ key: "id", title: "编号" }, { key: "title", title: "名称" }, { key: "status", title: "状态" }, { key: "from", title: "起" }, { key: "to", title: "止" }, { key: "file", title: "文件", render: (r) => <button onClick={() => Taovo.toast("下载 " + r.file)}>下载</button> }]} />;
-  else if (path === "/statements") body = <SimpleList title="对账单" rows={s.statements.filter((c) => c.dealerId === s.session.dealerId)} columns={[{ key: "id", title: "编号" }, { key: "period", title: "账期" }, { key: "amount", title: "应付", render: (r) => Money(r.amount) }, { key: "paid", title: "已付", render: (r) => Money(r.paid) }, { key: "status", title: "状态" }, { key: "op", title: "", render: (r) => r.status === "待经销商核对" ? <button onClick={() => Taovo.confirmStatement(r.id)}>核对无误</button> : "—"}]} />;
-  else if (path === "/notices") body = <SimpleList title="提醒" rows={s.notices} columns={[{ key: "title", title: "内容" }, { key: "time", title: "时间" }, { key: "read", title: "状态", render: (r) => r.read ? "已读" : "未读" }, { key: "go", title: "", render: (r) => <span><a href={r.href} onClick={() => Taovo.markNotice(r.id)}>打开</a> · <button onClick={() => Taovo.markNotice(r.id)}>标已读</button></span> }]} />;
+  else if (path === "/contracts") body = <SimpleList title="合同" rows={s.contracts.filter((c) => c.dealerId === s.session.dealerId)} columns={[{ key: "id", title: "编号" }, { key: "title", title: "名称" }, { key: "status", title: "状态" }, { key: "from", title: "起" }, { key: "to", title: "止" }, { key: "file", title: "文件", render: (r) => <button onClick={() => Taowo.toast("下载 " + r.file)}>下载</button> }]} />;
+  else if (path === "/statements") body = <SimpleList title="对账单" rows={s.statements.filter((c) => c.dealerId === s.session.dealerId)} columns={[{ key: "id", title: "编号" }, { key: "period", title: "账期" }, { key: "amount", title: "应付", render: (r) => Money(r.amount) }, { key: "paid", title: "已付", render: (r) => Money(r.paid) }, { key: "status", title: "状态" }, { key: "op", title: "", render: (r) => r.status === "待经销商核对" ? <button onClick={() => Taowo.confirmStatement(r.id)}>核对无误</button> : "—"}]} />;
+  else if (path === "/notices") body = <SimpleList title="提醒" rows={s.notices} columns={[{ key: "title", title: "内容" }, { key: "time", title: "时间" }, { key: "read", title: "状态", render: (r) => r.read ? "已读" : "未读" }, { key: "go", title: "", render: (r) => <span><a href={r.href} onClick={() => Taowo.markNotice(r.id)}>打开</a> · <button onClick={() => Taowo.markNotice(r.id)}>标已读</button></span> }]} />;
   else body = <Empty title="页面不存在" text={path} />;
 
   const notice = s.notices.some((n) => !n.read) && path === "/" ? (

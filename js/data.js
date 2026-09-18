@@ -1,4 +1,4 @@
-window.TAOVO_SEED = (function () {
+window.TAOWO_SEED = (function () {
   const shoe = ["36", "37", "38", "39", "40", "41", "42", "43", "44", "45"];
   const apparel = ["XS", "S", "M", "L", "XL", "XXL"];
   const img = {
@@ -31,7 +31,7 @@ window.TAOVO_SEED = (function () {
       id: "TW-1001",
       name: "Aero Knit Runner",
       nameZh: "气织竞速",
-      brand: "TAOVO",
+      brand: "TAOWO",
       ip: "Aero",
       cat: "鞋履",
       sub: "跑鞋",
@@ -59,7 +59,7 @@ window.TAOVO_SEED = (function () {
       id: "TW-1002",
       name: "Court 76",
       nameZh: "球场 76",
-      brand: "TAOVO",
+      brand: "TAOWO",
       ip: "Court",
       cat: "鞋履",
       sub: "板鞋",
@@ -171,7 +171,7 @@ window.TAOVO_SEED = (function () {
       id: "TW-1004",
       name: "Everyday Tee",
       nameZh: "日常短袖",
-      brand: "TAOVO",
+      brand: "TAOWO",
       ip: "Classic",
       cat: "服装",
       sub: "T恤",
@@ -252,7 +252,7 @@ window.TAOVO_SEED = (function () {
       id: "TW-2003",
       name: "Night Court",
       nameZh: "夜场",
-      brand: "TAOVO",
+      brand: "TAOWO",
       ip: "Court",
       cat: "鞋履",
       sub: "板鞋",
@@ -279,8 +279,21 @@ window.TAOVO_SEED = (function () {
     },
   ];
 
+  const merch = {
+    "TW-1001": { colorName: "竞速红", colors: [{ hex: "#8a1c1c", name: "竞速红" }, { hex: "#111111", name: "黑" }, { hex: "#ececec", name: "白" }], rating: 4.7, reviews: 214, badge: "新品" },
+    "TW-1002": { colorName: "米白", colors: [{ hex: "#cfc6b8", name: "米白" }, { hex: "#111111", name: "黑" }], rating: 4.4, reviews: 96, badge: "" },
+    "TW-1003": { colorName: "炭灰", colors: [{ hex: "#6b7280", name: "炭灰" }, { hex: "#111111", name: "黑" }], rating: 4.6, reviews: 151, badge: "" },
+    "TW-2001": { colorName: "越野绿", colors: [{ hex: "#1f3d2b", name: "越野绿" }, { hex: "#8a1c1c", name: "红" }], rating: 4.8, reviews: 67, badge: "新品" },
+    "TW-2002": { colorName: "黑", colors: [{ hex: "#111111", name: "黑" }], rating: 4.1, reviews: 40, badge: "" },
+    "TW-1004": { colorName: "本白", colors: [{ hex: "#ececec", name: "本白" }, { hex: "#111111", name: "黑" }], rating: 4.5, reviews: 320, badge: "" },
+    "TW-1005": { colorName: "雾蓝", colors: [{ hex: "#9aa7b1", name: "雾蓝" }], rating: 4.2, reviews: 18, badge: "即将售罄" },
+    "TW-1006": { colorName: "墨", colors: [{ hex: "#2e3a46", name: "墨" }], rating: 4.0, reviews: 12, badge: "" },
+    "TW-2003": { colorName: "夜黑", colors: [{ hex: "#222222", name: "夜黑" }, { hex: "#cfc6b8", name: "米白" }], rating: 4.3, reviews: 54, badge: "新品" },
+  };
+  products.forEach((p) => Object.assign(p, merch[p.id] || {}));
+
   return {
-    brand: "TAOVO",
+    brand: "TAOWO",
     today: "2026-09-18",
     users: [
       { id: "u-admin", name: "林澄", account: "admin", password: "123456", role: "ops_admin", org: "总部运营", status: "active" },
@@ -391,7 +404,7 @@ window.TAOVO_SEED = (function () {
       { id: "WH-P", name: "预售仓", city: "虚拟", skus: 420, sync: "每日 02:00" },
     ],
     dictionaries: {
-      brands: ["TAOVO", "Aero", "Studio"],
+      brands: ["TAOWO", "Aero", "Studio"],
       ips: ["Aero", "Court", "Trail", "Studio", "City", "Classic"],
       cats: ["鞋履", "服装", "配件"],
       subs: ["跑鞋", "板鞋", "越野", "上衣", "T恤", "外套", "裤装", "包袋"],
