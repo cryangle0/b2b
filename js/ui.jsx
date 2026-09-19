@@ -277,6 +277,53 @@ function filterProducts(products, { type, fair, q, brand, ip, cat, sub, wave, se
   });
 }
 
+function ProductPickModal({ products, dictionaries, value, onConfirm, onClose, title, onlySpot }) {
+  const dict = dictionaries || {};
+  const [f, setF] = useState({ q: "", brand: "", ip: "", cat: "", sub: "", wave: "" });
+  const [sel, setSel] = useState((value || []).slice());
+  let rows = (products || []).filter((p) => p.status === "live");
+  if (onlySpot) rows = rows.filter((p) => p.type === "spot");
+  rows = filterProducts(rows, f);
+  const ids = rows.map((r) => r.id);
+  const allOn = ids.length > 0 && ids.every((id) => sel.includes(id));
+  return (
+    <Modal wide title={title || "选择商品"} onClose={onClose} footer={
+      <div className="row">
+        <Btn ghost sm onClick={onClose}>取消</Btn>
+        <Btn sm onClick={() => onConfirm(sel)}>确认 · {sel.length} 款</Btn>
+      </div>
+    }>
+      <div className="row" style={{ flexWrap: "wrap", marginBottom: 12 }}>
+        <Field label="模糊搜"><input value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} placeholder="款号 / 名称" /></Field>
+        {[["brand", "品牌", dict.brands], ["ip", "IP", dict.ips], ["cat", "大类", dict.cats], ["sub", "小类", dict.subs], ["wave", "波次", dict.waves]].map(([k, n, opts]) => (
+          <Field key={k} label={n}>
+            <select value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}>
+              <option value="">全部</option>
+              {(opts || []).map((o) => <option key={o}>{o}</option>)}
+            </select>
+          </Field>
+        ))}
+      </div>
+      <div className="row" style={{ marginBottom: 8 }}>
+        <Btn sm ghost onClick={() => setSel(allOn ? sel.filter((id) => !ids.includes(id)) : Array.from(new Set(sel.concat(ids))))}>{allOn ? "取消全选" : "全选筛选结果"}</Btn>
+        <span className="muted">已选 {sel.length} · 当前 {rows.length} 款</span>
+      </div>
+      <div className="prod-pick" style={{ maxHeight: 360 }}>
+        {rows.map((p) => {
+          const on = sel.includes(p.id);
+          return (
+            <label key={p.id}>
+              <input type="checkbox" checked={on} onChange={() => setSel(on ? sel.filter((x) => x !== p.id) : sel.concat(p.id))} />
+              <Photo src={productThumb(p)} alt="" color={p.color} />
+              <span>{p.id}<br />{p.nameZh || p.name}</span>
+            </label>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+}
+
 Object.assign(window, {
-  Photo, Icon, go, useHash, useStore, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, Toasts, DataTable, Qty, downloadText, downloadUrl, readLocalFile, dealerName, Pager, GoodsLines, ImagePicker, contractPreview, productThumb, filterProducts, groupOrderLines, qtyOfSize,
+  Photo, Icon, go, useHash, useStore, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, Toasts, DataTable, Qty, downloadText, downloadUrl, readLocalFile, dealerName, Pager, GoodsLines, ImagePicker, contractPreview, ProductPickModal, productThumb, filterProducts, groupOrderLines, qtyOfSize,
 });

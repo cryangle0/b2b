@@ -1,5 +1,5 @@
 window.Taowo = (function () {
-  const KEY = "taowo-b2b-proto-v7";
+  const KEY = "taowo-b2b-proto-v8";
   const seed = window.TAOWO_SEED;
 
   function clone(v) {
@@ -103,10 +103,10 @@ window.Taowo = (function () {
         label.push(c.name);
       }
       if (c.type === "满折") {
-        const hit = items.some((it) => /Tee|Short/.test(product(it.pid)?.name || ""));
+        const hit = items.some((it) => /Tee|Short|球衣|短裤|Jersey/.test((product(it.pid)?.name || "") + (product(it.pid)?.nameZh || "")));
         if (hit) {
           const part = items
-            .filter((it) => /Tee|Short/.test(product(it.pid)?.name || ""))
+            .filter((it) => /Tee|Short|球衣|短裤|Jersey/.test((product(it.pid)?.name || "") + (product(it.pid)?.nameZh || "")))
             .reduce((n, l) => n + l.qty * l.price, 0);
           off += Math.round(part * (1 - c.value));
           label.push(c.name);
@@ -206,10 +206,14 @@ window.Taowo = (function () {
     canOrder,
     isExpired,
     hasPerm,
-    addToBag(pid, sizeQty) {
+    addToBag(pid, sizeQty, lead) {
       const p = product(pid);
       if (!canOrder(p)) {
         toast(isExpired(p) ? "期货已过有效期，不可加购" : "当前不可订购", "err");
+        return false;
+      }
+      if (p.type === "futures" && !lead) {
+        toast("期货必须先选择交期", "err");
         return false;
       }
       Object.entries(sizeQty).forEach(([size, qty]) => {
@@ -220,30 +224,30 @@ window.Taowo = (function () {
           toast(size + " 可订量不足（" + avail + "）", "err");
           return;
         }
-        const hit = state.cart.find((c) => c.pid === pid && c.size === size);
+        const hit = state.cart.find((c) => c.pid === pid && c.size === size && (c.lead || "") === (lead || ""));
         if (hit) hit.qty += qty;
-        else state.cart.push({ pid, size, qty, price: p.price, selected: true });
+        else state.cart.push({ pid, size, qty, price: p.price, selected: true, lead: lead || p.lead || "" });
       });
       emit();
       toast("已加入购物袋");
       return true;
     },
-    setCartQty(pid, size, qty) {
+    setCartQty(pid, size, qty, lead) {
       qty = Math.max(0, Number(qty) || 0);
       const p = product(pid);
       if (p && qty > (p.stock[size] || 0)) qty = p.stock[size] || 0;
       state.cart = state.cart
-        .map((c) => (c.pid === pid && c.size === size ? { ...c, qty } : c))
+        .map((c) => (c.pid === pid && c.size === size && (lead == null || (c.lead || "") === (lead || "")) ? { ...c, qty } : c))
         .filter((c) => c.qty > 0);
       emit();
     },
-    removeCart(pid, size) {
-      state.cart = state.cart.filter((c) => !(c.pid === pid && c.size === size));
+    removeCart(pid, size, lead) {
+      state.cart = state.cart.filter((c) => !(c.pid === pid && c.size === size && (lead == null || (c.lead || "") === (lead || ""))));
       emit();
     },
-    toggleSelectCart(pid, size) {
+    toggleSelectCart(pid, size, lead) {
       state.cart = state.cart.map((c) =>
-        c.pid === pid && c.size === size ? { ...c, selected: c.selected === false } : c
+        c.pid === pid && c.size === size && (lead == null || (c.lead || "") === (lead || "")) ? { ...c, selected: c.selected === false } : c
       );
       emit();
     },
@@ -262,6 +266,7 @@ window.Taowo = (function () {
         qty: c.qty,
         price: c.price,
         shipped: 0,
+        lead: c.lead || "",
       }));
       if (!items.length) {
         toast("没有可提交的商品", "err");
@@ -271,6 +276,10 @@ window.Taowo = (function () {
         const p = product(l.pid);
         if (!canOrder(p)) {
           toast((p && p.id) + " 当前不可订购", "err");
+          return null;
+        }
+        if (p.type === "futures" && !l.lead) {
+          toast(p.id + " 请选择交期后再下单", "err");
           return null;
         }
         if (l.qty > (p.stock[l.size] || 0)) {
@@ -791,7 +800,16 @@ window.Taowo = (function () {
       if (!c.dealerId) return toast("请选择经销商", "err");
       if (!(c.kind || c.type)) return toast("请选择合同类型", "err");
       if (!c.quarter) return toast("请选择季度", "err");
-      if (!c.fileUrl && !c.id) return toast("请上传合同文件", "err");
+      if (!c.fileUrl && !c.id) {
+        const dealer0 = state.dealers.find((d) => d.id === c.dealerId);
+        const title0 = c.title || ((c.kind || c.type) + " " + c.quarter);
+        const html = "<!doctype html><html><head><meta charset='utf-8'><style>body{font-family:Helvetica,Arial,sans-serif;padding:48px;color:#111;line-height:1.6}h1{font-weight:500}</style></head><body><h1>" +
+          title0 + "</h1><p>经销商 " + (dealer0?.name || c.dealerId) + "</p><p>类型 " + (c.kind || c.type) + " · 季度 " + c.quarter +
+          "</p><p>未上传原件时生成演示正文，不是假装已传 PDF。</p></body></html>";
+        c.fileUrl = "data:text/html;charset=utf-8," + encodeURIComponent(html);
+        c.fileName = c.fileName || (title0 + ".html");
+        c.mime = "text/html";
+      }
       const dealer = state.dealers.find((d) => d.id === c.dealerId);
       const row = {
         id: c.id || ("CT-" + Date.now().toString().slice(-6)),
@@ -825,18 +843,23 @@ window.Taowo = (function () {
       return "data:text/html;charset=utf-8," + encodeURIComponent(html);
     },
     importProducts(text) {
-      const lines = text.trim().split(/\r?\n/).filter(Boolean);
+      const lines = String(text || "").trim().split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) {
+        toast("模板至少要有表头和一行", "err");
+        return { created: 0, updated: 0, failed: [{ line: 1, id: "", msg: "空文件" }], rows: [] };
+      }
       const header = (lines.shift() || "").split(/[,	]/).map((s) => s.trim());
       const idx = (n) => header.findIndex((h) => h.includes(n));
-      let n = 0;
-      lines.forEach((line) => {
+      const report = { created: 0, updated: 0, failed: [], rows: [] };
+      lines.forEach((line, n) => {
         const c = line.split(/[,	]/);
-        const id = c[idx("款号")] || c[0];
-        if ((c[idx("有效期")] || "").trim() && !product(id)) {
-          toast(id + " 期货必须先有现货主数据", "err");
+        const id = (c[idx("款号")] || c[0] || "").trim();
+        if (!id) {
+          report.failed.push({ line: n + 2, id: "", msg: "缺款号" });
           return;
         }
-        const base = product(id) || {
+        const exists = product(id);
+        const base = exists || {
           id, sizes: ["S", "M", "L", "XL"], stock: { S: 0, M: 0, L: 0, XL: 0 },
           images: [state.products[0]?.images[0]], warehouse: "华东仓", status: "live", orderable: true, fair: false, color: "#ddd",
         };
@@ -844,24 +867,80 @@ window.Taowo = (function () {
           ...base,
           id,
           name: c[idx("名称")] || base.name,
+          nameZh: c[idx("中文")] || base.nameZh || c[idx("名称")] || base.name,
           year: Number(c[idx("年份")] || base.year || 2026),
           season: c[idx("季节")] || base.season || "SS26",
           brand: c[idx("品牌")] || base.brand || "TAOWO",
           cat: c[idx("大类")] || base.cat || "服装",
-          sub: c[idx("小类")] || base.sub || "T恤",
+          sub: c[idx("小类")] || base.sub || "球衣",
           gender: c[idx("性别")] || base.gender || "中性",
           wave: c[idx("波次")] || base.wave || "01",
           price: Number(c[idx("价格")] || base.price || 0),
           lead: c[idx("交期")] || base.lead || "现货 5 天",
-          validTo: c[idx("有效期")] || base.validTo,
-          type: (c[idx("有效期")] || "").trim() ? "futures" : (base.type || "spot"),
+          type: "spot",
         };
         const i = state.products.findIndex((x) => x.id === p.id);
-        if (i >= 0) state.products[i] = { ...state.products[i], ...p };
-        else state.products.unshift(p);
-        n++;
+        if (i >= 0) {
+          state.products[i] = { ...state.products[i], ...p, type: state.products[i].type === "futures" ? "futures" : "spot" };
+          report.updated++;
+          report.rows.push({ id, action: "更新" });
+        } else {
+          state.products.unshift(p);
+          report.created++;
+          report.rows.push({ id, action: "新建现货" });
+        }
       });
-      toast("已导入 / 更新 " + n + " 款商品");
+      emit();
+      toast("现货导入：新建 " + report.created + " · 更新 " + report.updated + (report.failed.length ? " · 失败 " + report.failed.length : ""));
+      return report;
+    },
+    importFutures(text, validToDefault) {
+      const lines = String(text || "").trim().split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) {
+        toast("期货导入至少要有表头和一行现货款号", "err");
+        return { created: 0, updated: 0, failed: [{ line: 1, id: "", msg: "空文件" }], rows: [] };
+      }
+      const header = (lines.shift() || "").split(/[,	]/).map((s) => s.trim());
+      const idx = (n) => header.findIndex((h) => h.includes(n));
+      const report = { created: 0, updated: 0, failed: [], rows: [] };
+      lines.forEach((line, n) => {
+        const c = line.split(/[,	]/);
+        const id = (c[idx("款号")] || c[0] || "").trim();
+        const src = product(id);
+        if (!src) {
+          report.failed.push({ line: n + 2, id, msg: "平台没有此款号，不能生成期货" });
+          return;
+        }
+        if (src.type === "futures") {
+          report.failed.push({ line: n + 2, id, msg: "该款已是期货，请填现货款号" });
+          return;
+        }
+        const lead = (c[idx("交期")] || "期货 45 天").trim();
+        const validTo = (c[idx("有效期")] || validToDefault || "2026-12-31").trim();
+        const r = api.createFuturesFromSpot(src.id, validTo, lead, true);
+        if (r && r.ok) {
+          report.created++;
+          report.rows.push({ id: r.id, action: "由 " + src.id + " 生成" });
+        } else {
+          report.failed.push({ line: n + 2, id, msg: (r && r.msg) || "生成失败" });
+        }
+      });
+      emit();
+      toast("期货导入：生成 " + report.created + (report.failed.length ? " · 失败 " + report.failed.length : ""));
+      return report;
+    },
+    deleteProducts(ids) {
+      if (!ids || !ids.length) {
+        toast("请先勾选商品", "err");
+        return;
+      }
+      state.products = state.products.filter((p) => !ids.includes(p.id));
+      (state.cms.floors || []).forEach((f) => {
+        if (f.productIds) f.productIds = f.productIds.filter((id) => !ids.includes(id));
+      });
+      state.productLogs.unshift({ t: now(), user: state.session?.name || "系统", action: "删除商品", target: ids.join(",") });
+      emit();
+      toast("已删除 " + ids.length + " 款");
     },
     parseImport(text) {
       const lines = text.trim().split(/\r?\n/).filter(Boolean);
@@ -971,30 +1050,48 @@ window.Taowo = (function () {
       emit();
       toast("账号信息已保存");
     },
-    createFuturesFromSpot(pid, validTo, lead) {
+    createFuturesFromSpot(pid, validTo, lead, silent) {
       const src = product(pid);
       if (!src || src.type !== "spot") {
-        toast("只能从已同步现货创建预售", "err");
-        return;
+        if (!silent) toast("只能从平台已有现货创建预售", "err");
+        return { ok: false, msg: "不是现货或不存在" };
       }
       const id = src.id.replace("TW-1", "TW-2");
-      const nid = product(id) ? src.id + "-F" : id;
+      let nid = product(id) ? src.id + "-F" : id;
       if (product(nid)) {
-        toast(nid + " 已存在", "err");
-        return;
+        nid = src.id + "-F" + String(Date.now()).slice(-3);
       }
       const p = JSON.parse(JSON.stringify(src));
       p.id = nid;
       p.type = "futures";
       p.lead = lead || "期货 45 天";
+      p.leads = state.dictionaries.futureLeads || ["期货 30 天", "期货 45 天", "期货 60 天"];
       p.validFrom = state.today;
       p.validTo = validTo;
       p.warehouse = "预售仓";
       p.fair = true;
       state.products.unshift(p);
-      state.productLogs.unshift({ t: now(), user: state.session.name, action: "现货转预售", target: src.id + " → " + nid });
+      state.productLogs.unshift({ t: now(), user: state.session?.name || "系统", action: "现货转预售", target: src.id + " → " + nid });
+      if (!silent) {
+        emit();
+        toast("已从 " + src.id + " 创建预售 " + nid);
+      }
+      return { ok: true, id: nid };
+    },
+    createFuturesBatch(ids, validTo, lead) {
+      if (!ids || !ids.length) {
+        toast("请先勾选现货", "err");
+        return;
+      }
+      let n = 0;
+      const fail = [];
+      ids.forEach((id) => {
+        const r = api.createFuturesFromSpot(id, validTo, lead, true);
+        if (r && r.ok) n++;
+        else fail.push(id + " " + ((r && r.msg) || ""));
+      });
       emit();
-      toast("已从 " + src.id + " 创建预售 " + nid);
+      toast("已生成 " + n + " 款预售" + (fail.length ? "，失败 " + fail.length : ""));
     },
     markNotice(id) {
       const n = state.notices.find((x) => x.id === id);

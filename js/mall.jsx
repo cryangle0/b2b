@@ -289,9 +289,19 @@ function PdpView({ s, id }) {
   const [buy, setBuy] = useState(false);
   const [open, setOpen] = useState("desc");
   const [addr, setAddr] = useState(s.addresses.find((a) => a.def)?.line || s.addresses[0]?.line || "");
+  const [lead, setLead] = useState("");
   if (!p) return <Empty title="商品不存在" text="返回列表" action={<Btn onClick={() => go("/shop/spot")}>现货</Btn>} />;
   const can = Taowo.canOrder(p);
   const expired = Taowo.isExpired(p);
+  const leadOpts = p.leads && p.leads.length ? p.leads : (p.type === "futures" ? (s.dictionaries.futureLeads || ["期货 30 天", "期货 45 天", "期货 60 天"]) : []);
+  function needLead() { return p.type === "futures"; }
+  function ensureLead() {
+    if (needLead() && !lead) {
+      Taowo.toast("请先选择交期", "err");
+      return false;
+    }
+    return true;
+  }
   const bag = {};
   const wish = {};
   p.sizes.forEach((sz) => {
@@ -305,7 +315,8 @@ function PdpView({ s, id }) {
   const bagQty = Object.values(bag).reduce((n, v) => n + v, 0);
   const wishQty = Object.values(wish).reduce((n, v) => n + v, 0);
   function commit() {
-    if (bagQty) Taowo.addToBag(p.id, bag);
+    if (bagQty && !ensureLead()) return;
+    if (bagQty) Taowo.addToBag(p.id, bag, lead);
     Object.entries(wish).forEach(([sz, n]) => Taowo.addWish(p.id, sz, n));
     if (!bagQty && !wishQty) Taowo.toast("请在尺码矩阵填写数量", "err");
   }
@@ -330,8 +341,16 @@ function PdpView({ s, id }) {
         <div className="pdp-buy">
           <h1>{productTitle(p)}</h1>
           <div className="muted">品牌 {p.brand} · IP {p.ip} · {p.cat}/{p.sub} · 波次 {p.wave} · {p.id}</div>
-          <div className="stockline">{can ? "有货 — " + p.lead : (expired ? "期货已过期，不可订购" : "当前不可订购")}</div>
+          <div className="stockline">{can ? "有货 — " + (p.type === "futures" ? "请选择交期" : p.lead) : (expired ? "期货已过期，不可订购" : "当前不可订购")}</div>
           <div className="your-price"><span>经销价</span> {Money(p.price)}</div>
+          {needLead() && (
+            <Field label="交期（下单 / 加入购物袋必选）">
+              <select value={lead} onChange={(e) => setLead(e.target.value)}>
+                <option value="">请选择交期</option>
+                {leadOpts.map((x) => <option key={x}>{x}</option>)}
+              </select>
+            </Field>
+          )}
           <div className="muted">建议零售 {Money(p.retail)} · {p.warehouse}</div>
           <div className="size-head"><span>尺码矩阵</span><button className="linkish" onClick={() => Taowo.toast("鞋码 36–45 · 服装 XS–XXL")}>尺码表</button></div>
           <p className="muted">边框内填写数量。有货进购物袋；无库存尺码仍展示，填数后加入心愿单。</p>
@@ -364,7 +383,7 @@ function PdpView({ s, id }) {
             }}>加入心愿单{wishQty ? " · " + wishQty + " 件" : ""}</Btn>
           </div>
           <div style={{ marginTop: 10 }}>
-            <Btn ghost block disabled={!bagQty} onClick={() => setBuy(true)}>立即下单有货尺码</Btn>
+            <Btn ghost block disabled={!bagQty} onClick={() => { if (!ensureLead()) return; setBuy(true); }}>立即下单有货尺码</Btn>
           </div>
           <div className="pdp-assures">授权货盘 · 审核后发货 · 缺货进心愿单</div>
           <div className="row" style={{ marginTop: 12 }}>
@@ -372,12 +391,12 @@ function PdpView({ s, id }) {
           </div>
           {buy && (
             <Modal title="提交订购单" onClose={() => setBuy(false)} footer={<Btn block onClick={() => {
-              const lines = Object.entries(bag).map(([sz, qn]) => ({ pid: p.id, size: sz, qty: Number(qn), price: p.price }));
+              const lines = Object.entries(bag).map(([sz, qn]) => ({ pid: p.id, size: sz, qty: Number(qn), price: p.price, lead }));
               const o = Taowo.submitOrder({ address: addr, lines, type: p.type, remark: "详情页直接下单" });
               if (o) go("/orders/" + o.id);
             }}>确认提交</Btn>}>
               <Field label="地址"><input value={addr} onChange={(e) => setAddr(e.target.value)} /></Field>
-              <p className="muted">{bagQty} 件 · {Money(p.price * bagQty)} · 提交后进入审核</p>
+              <p className="muted">{bagQty} 件 · {Money(p.price * bagQty)} · {needLead() ? "交期 " + lead : p.lead} · 提交后进入审核</p>
             </Modal>
           )}
           <div className="acc">
@@ -417,20 +436,20 @@ function BagView({ s }) {
         <Btn sm ghost onClick={() => Taowo.selectAllCart(true)}>全选</Btn>
         <Btn sm ghost onClick={() => Taowo.removeSelectedCart()}>删除所选</Btn>
       </div>
-      {items.map((c) => {
+          {items.map((c) => {
         const p = Taowo.product(c.pid);
         return (
-          <div key={c.pid + c.size} style={{ display: "grid", gridTemplateColumns: "28px 120px 1fr auto", gap: 16, padding: "18px 0", borderBottom: "1px solid var(--line)", alignItems: "center" }}>
-            <input type="checkbox" checked={c.selected !== false} onChange={() => Taowo.toggleSelectCart(c.pid, c.size)} />
+          <div key={c.pid + c.size + (c.lead || "")} style={{ display: "grid", gridTemplateColumns: "28px 120px 1fr auto", gap: 16, padding: "18px 0", borderBottom: "1px solid var(--line)", alignItems: "center" }}>
+            <input type="checkbox" checked={c.selected !== false} onChange={() => Taowo.toggleSelectCart(c.pid, c.size, c.lead)} />
             <Photo src={productThumb(p)} alt={p?.name} color={p?.color} />
             <div>
               <strong>{p?.name}</strong>
-              <div className="muted">SKU {c.pid}-{c.size} · {p?.type === "futures" ? "期货" : "现货"}</div>
-              <div style={{ marginTop: 10 }}><Qty value={c.qty} max={Math.max(p?.stock[c.size] || 0, c.qty)} onChange={(v) => Taowo.setCartQty(c.pid, c.size, v)} /></div>
+              <div className="muted">SKU {c.pid}-{c.size} · {p?.type === "futures" ? "期货" : "现货"}{c.lead ? " · 交期 " + c.lead : ""}</div>
+              <div style={{ marginTop: 10 }}><Qty value={c.qty} max={Math.max(p?.stock[c.size] || 0, c.qty)} onChange={(v) => Taowo.setCartQty(c.pid, c.size, v, c.lead)} /></div>
             </div>
             <div className="right" style={{ minWidth: 88 }}>
               <div>{Money(c.price * c.qty)}</div>
-              <button className="linkish" onClick={() => Taowo.removeCart(c.pid, c.size)}>删除</button>
+              <button className="linkish" onClick={() => Taowo.removeCart(c.pid, c.size, c.lead)}>删除</button>
             </div>
           </div>
         );

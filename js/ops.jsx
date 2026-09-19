@@ -1,5 +1,5 @@
 const { useState } = React;
-const { Icon, Photo, go, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, DataTable, downloadText, downloadUrl, readLocalFile, dealerName, Pager, GoodsLines, ImagePicker, LoginView, productThumb, groupOrderLines, qtyOfSize } = window;
+const { Icon, Photo, go, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, DataTable, downloadText, downloadUrl, readLocalFile, dealerName, Pager, GoodsLines, ImagePicker, ProductPickModal, LoginView, productThumb, groupOrderLines, qtyOfSize } = window;
 
 function canSetOrgPassword() {
   return Taowo.hasPerm("sys.password") || Taowo.hasPerm("sys.*");
@@ -87,6 +87,7 @@ function CmsView({ s }) {
   const [catNav, setCatNav] = useState((cms.categoryNav || []).map((x) => x.label + "|" + x.href).join("\n"));
   const [heroes, setHeroes] = useState((cms.hero || []).map((h) => ({ ...h })));
   const [banner, setBanner] = useState({ ...cms.banner });
+  const [pickFloor, setPickFloor] = useState(null);
   const [floors, setFloors] = useState((cms.floors || []).map((f, i) => ({
     id: f.id || ("f" + (i + 1)),
     kind: f.kind || (f.img && !f.productIds ? "image" : "products"),
@@ -120,7 +121,7 @@ function CmsView({ s }) {
   return (
     <div>
       <div className="hrow">
-        <div><h1>页面装修</h1><p>商品楼层从已上架商品勾选；轮播、专场和其他图片楼层支持本地上传或图片库。</p></div>
+        <div><h1>页面装修</h1><p>商品楼层点「添加商品」弹窗筛选并批量勾选；轮播、专场和图片楼层支持本地上传或图片库。</p></div>
         <div className="row">
           <Btn sm ghost onClick={() => {
             const next = device === "PC" ? "H5" : "PC";
@@ -175,19 +176,18 @@ function CmsView({ s }) {
             </>
           ) : (
             <div style={{ marginTop: 8 }}>
-              <div className="muted" style={{ marginBottom: 8 }}>从已上架商品选择（{(f.productIds || []).length}）</div>
-              <div className="prod-pick">
-                {live.map((p) => {
-                  const on = (f.productIds || []).includes(p.id);
+              <div className="row" style={{ marginBottom: 8 }}>
+                <Btn sm onClick={() => setPickFloor(i)}>添加商品</Btn>
+                <span className="muted">已选 {(f.productIds || []).length} 款</span>
+              </div>
+              <div className="sel-prod">
+                {(f.productIds || []).map((id) => {
+                  const p = s.products.find((x) => x.id === id);
                   return (
-                    <label key={p.id}>
-                      <input type="checkbox" checked={on} onChange={() => {
-                        const ids = f.productIds || [];
-                        setFloor(i, { productIds: on ? ids.filter((x) => x !== p.id) : ids.concat(p.id) });
-                      }} />
-                      <Photo src={productThumb(p)} alt="" color={p.color} />
-                      <span>{p.id}<br />{p.nameZh || p.name}</span>
-                    </label>
+                    <i key={id}>
+                      {p?.nameZh || p?.name || id}
+                      <button className="linkish" onClick={() => setFloor(i, { productIds: f.productIds.filter((x) => x !== id) })}>移除</button>
+                    </i>
                   );
                 })}
               </div>
@@ -196,6 +196,19 @@ function CmsView({ s }) {
         </div>
       ))}
       <p className="muted">发布后商城首页立即读取所选商品与图片。</p>
+      {pickFloor != null && floors[pickFloor] && (
+        <ProductPickModal
+          title="添加楼层商品"
+          products={live}
+          dictionaries={s.dictionaries}
+          value={floors[pickFloor].productIds || []}
+          onClose={() => setPickFloor(null)}
+          onConfirm={(ids) => {
+            setFloor(pickFloor, { productIds: ids });
+            setPickFloor(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -410,9 +423,12 @@ function ProductsOps({ s, type }) {
   const futures = type === "futures";
   const [f, setF] = useState({ q: "", brand: "", ip: "", cat: "", sub: "", wave: "", status: "", orderable: "" });
   const [sel, setSel] = useState([]);
-  const [csv, setCsv] = useState("款号,名称,年份,季节,品牌,大类,小类,性别,波次,价格,交期,期货有效期\nTW-1003,Studio Fleece,2026,FW26,Studio,服装,上衣,中性,02,248,期货 45 天,2026-12-31");
+  const [csv, setCsv] = useState(futures
+    ? "款号,交期,期货有效期\nTW-1001,期货 45 天,2026-12-31\nTW-9999,期货 45 天,2026-12-31"
+    : "款号,名称,年份,季节,品牌,大类,小类,性别,波次,价格,交期\nTW-1010,Street Jersey,2026,SS26,TAOWO,服装,球衣,中性,02,188,现货 5 天");
   const [validTo, setValidTo] = useState("2026-12-31");
-  const [fromId, setFromId] = useState(s.products.find((p) => p.type === "spot")?.id || "");
+  const [lead, setLead] = useState((s.dictionaries.futureLeads || ["期货 45 天"])[1] || "期货 45 天");
+  const [pick, setPick] = useState(false);
   let rows = s.products.filter((p) => p.type === (futures ? "futures" : "spot"));
   rows = rows.filter((p) => {
     if (f.brand && p.brand !== f.brand) return false;
@@ -429,8 +445,19 @@ function ProductsOps({ s, type }) {
     }
     return true;
   });
+  const rowIds = rows.map((r) => r.id);
+  const allOn = rowIds.length > 0 && rowIds.every((id) => sel.includes(id));
+  function toggleAll(e) {
+    e.stopPropagation();
+    setSel(allOn ? sel.filter((id) => !rowIds.includes(id)) : Array.from(new Set(sel.concat(rowIds))));
+  }
   const cols = [
-    { key: "ck", title: "", width: 36, render: (r) => <input type="checkbox" checked={sel.includes(r.id)} onClick={(e) => e.stopPropagation()} onChange={() => setSel(sel.includes(r.id) ? sel.filter((x) => x !== r.id) : sel.concat(r.id))} /> },
+    {
+      key: "ck",
+      width: 36,
+      title: <input type="checkbox" checked={allOn} onChange={toggleAll} title="全选当前筛选" />,
+      render: (r) => <input type="checkbox" checked={sel.includes(r.id)} onClick={(e) => e.stopPropagation()} onChange={() => setSel(sel.includes(r.id) ? sel.filter((x) => x !== r.id) : sel.concat(r.id))} />,
+    },
     { key: "img", title: "图", render: (r) => <div className="ops-thumb"><Photo src={productThumb(r)} alt={r.name} color={r.color} /></div> },
     { key: "id", title: "款号" },
     { key: "name", title: "名称" },
@@ -446,13 +473,20 @@ function ProductsOps({ s, type }) {
   return (
     <div>
       <div className="hrow">
-        <div><h1>{futures ? "期货" : "现货"}</h1><p>{futures ? "交期与有效期；过期前台不可订。" : "现货无有效期。列表支持图片、多维筛选、批量上下架与可订。"}</p></div>
+        <div>
+          <h1>{futures ? "期货" : "现货"}</h1>
+          <p>{futures ? "导入须平台已有现货款号；也可弹窗筛选批量预售。过期前台不可订。" : "现货无有效期。导入直接建档或更新。列表可全选删除。"}</p>
+        </div>
         <div className="row">
           <Btn sm ghost onClick={() => Taowo.runSync("ERP 现货商品")}>ERP 同步</Btn>
           <Btn sm ghost onClick={() => {
-            const header = "款号,名称,年份,季节,品牌,大类,小类,性别,波次,价格,交期,期货有效期";
-            const body = s.products.map((p) => [p.id, p.name, p.year, p.season, p.brand, p.cat, p.sub, p.gender, p.wave, p.price, p.lead, p.validTo || ""].join(","));
-            downloadText("商品导入模板.csv", [header, ...body].join("\n"), "text/csv");
+            const header = futures ? "款号,交期,期货有效期" : "款号,名称,年份,季节,品牌,大类,小类,性别,波次,价格,交期";
+            const body = (futures ? s.products.filter((p) => p.type === "spot") : s.products).map((p) => (
+              futures
+                ? [p.id, p.lead || "期货 45 天", validTo].join(",")
+                : [p.id, p.name, p.year, p.season, p.brand, p.cat, p.sub, p.gender, p.wave, p.price, p.lead].join(",")
+            ));
+            downloadText(futures ? "期货导入模板.csv" : "商品导入模板.csv", [header, ...body].join("\n"), "text/csv");
           }}>导出模板</Btn>
         </div>
       </div>
@@ -486,29 +520,55 @@ function ProductsOps({ s, type }) {
         <Btn sm ghost onClick={() => sel.length ? Taowo.batchStatus(sel, { status: "off" }) : Taowo.toast("请先勾选商品", "err")}>批量下架</Btn>
         <Btn sm onClick={() => sel.length ? Taowo.batchStatus(sel, { orderable: true, status: "live" }) : Taowo.toast("请先勾选商品", "err")}>批量可订</Btn>
         <Btn sm danger onClick={() => sel.length ? Taowo.batchStatus(sel, { orderable: false }) : Taowo.toast("请先勾选商品", "err")}>批量不可订</Btn>
+        <Btn sm danger onClick={() => {
+          if (!sel.length) return Taowo.toast("请先勾选商品", "err");
+          Taowo.deleteProducts(sel);
+          setSel([]);
+        }}>删除商品</Btn>
+        {futures && <Btn sm onClick={() => setPick(true)}>手动预售</Btn>}
       </div>
       {futures && (
         <div className="row" style={{ marginBottom: 12, alignItems: "end" }}>
-          <Field label="从现货创建预售">
-            <select value={fromId} onChange={(e) => setFromId(e.target.value)}>{s.products.filter((p) => p.type === "spot").map((p) => <option key={p.id} value={p.id}>{p.id} {p.name}</option>)}</select>
+          <Field label="预售有效期至"><input value={validTo} onChange={(e) => setValidTo(e.target.value)} /></Field>
+          <Field label="默认交期">
+            <select value={lead} onChange={(e) => setLead(e.target.value)}>
+              {(s.dictionaries.futureLeads || ["期货 30 天", "期货 45 天", "期货 60 天"]).map((x) => <option key={x}>{x}</option>)}
+            </select>
           </Field>
-          <Field label="有效期至"><input value={validTo} onChange={(e) => setValidTo(e.target.value)} /></Field>
-          <Btn sm onClick={() => Taowo.createFuturesFromSpot(fromId, validTo, "期货 45 天")}>生成预售</Btn>
         </div>
       )}
-      <details style={{ marginBottom: 16 }}>
-        <summary>CSV 导入</summary>
-        <textarea value={csv} onChange={(e) => setCsv(e.target.value)} />
-        <input type="file" accept=".csv,.txt" onChange={(e) => {
-          const file = e.target.files[0];
-          if (!file) return;
-          const r = new FileReader();
-          r.onload = () => setCsv(String(r.result));
-          r.readAsText(file);
-        }} />
-        <Btn sm onClick={() => Taowo.importProducts(csv)}>导入商品</Btn>
-      </details>
+      <div className="floor-card" style={{ marginBottom: 16 }}>
+        <div className="hrow" style={{ marginBottom: 8 }}>
+          <b>{futures ? "导入期货" : "导入商品"}</b>
+          <span className="muted">{futures ? "表头须含款号。平台没有该现货款号会失败，不会凭空建期货。" : "可见导入，不只导出模板。新建现货或更新已有款。"}</span>
+        </div>
+        <textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={5} />
+        <div className="row" style={{ marginTop: 8 }}>
+          <input type="file" accept=".csv,.txt" onChange={(e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const r = new FileReader();
+            r.onload = () => setCsv(String(r.result));
+            r.readAsText(file);
+          }} />
+          <Btn sm onClick={() => futures ? Taowo.importFutures(csv, validTo) : Taowo.importProducts(csv)}>导入商品</Btn>
+        </div>
+      </div>
       <DataTable onRow={(r) => go("/ops/products/" + (futures ? "futures" : "spot") + "/" + r.id)} columns={cols} rows={rows} />
+      {pick && (
+        <ProductPickModal
+          title="手动预售 · 筛选并批量选择平台现货"
+          products={s.products}
+          dictionaries={s.dictionaries}
+          value={[]}
+          onlySpot
+          onClose={() => setPick(false)}
+          onConfirm={(ids) => {
+            Taowo.createFuturesBatch(ids, validTo, lead);
+            setPick(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1042,6 +1102,7 @@ function PayOps({ s }) {
 function ContractOps({ s }) {
   const types = s.dictionaries.contractTypes || ["框架合同", "期货合同", "现货合同", "补充协议"];
   const quarters = s.dictionaries.quarters || ["2026Q3", "2026Q4"];
+  const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     dealerId: s.dealers[0]?.id || "",
     kind: types[0],
@@ -1052,11 +1113,18 @@ function ContractOps({ s }) {
     mime: "",
   });
   function upload(file) {
+    if (!file) return;
     readLocalFile(file, (url, mime, name) => setForm({ ...form, fileUrl: url, mime, fileName: name }), /pdf|image\/|png|jpe?g|webp|html/i);
+  }
+  function resetForm() {
+    setForm({ dealerId: s.dealers[0]?.id || "", kind: types[0], quarter: quarters[2] || quarters[0], title: "", fileName: "", fileUrl: "", mime: "" });
   }
   return (
     <div>
-      <div className="hrow"><div><h1>合同</h1><p>本地上传。列表展示经销商、类型、季度；点进明细在线查看并下载。</p></div></div>
+      <div className="hrow">
+        <div><h1>合同</h1><p>本页只列已有合同。创建走右上角弹窗，不在列表页铺表单。</p></div>
+        <Btn sm onClick={() => setOpen(true)}>创建合同</Btn>
+      </div>
       <DataTable
         onRow={(r) => go("/ops/contracts/" + r.id)}
         columns={[
@@ -1069,35 +1137,45 @@ function ContractOps({ s }) {
         ]}
         rows={s.contracts}
       />
-      <h2 style={{ fontSize: 18, margin: "28px 0 12px", fontWeight: 500 }}>上传合同</h2>
-      <div className="form-2">
-        <Field label="经销商">
-          <select value={form.dealerId} onChange={(e) => setForm({ ...form, dealerId: e.target.value })}>
-            {s.dealers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-        </Field>
-        <Field label="合同类型">
-          <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
-            {types.map((t) => <option key={t}>{t}</option>)}
-          </select>
-        </Field>
-        <Field label="季度">
-          <select value={form.quarter} onChange={(e) => setForm({ ...form, quarter: e.target.value })}>
-            {quarters.map((t) => <option key={t}>{t}</option>)}
-          </select>
-        </Field>
-        <Field label="名称"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="可空，默认类型+季度" /></Field>
-      </div>
-      <div className="row" style={{ margin: "12px 0" }}>
-        <label className="btn sm">选择本地文件
-          <input type="file" accept=".pdf,image/*,.html,.txt" hidden onChange={(e) => { upload(e.target.files[0]); e.target.value = ""; }} />
-        </label>
-        <span className="muted">{form.fileName || "未选择"}</span>
-        <Btn sm onClick={() => {
-          const row = Taowo.saveContract(form);
-          if (row) setForm({ ...form, title: "", fileName: "", fileUrl: "", mime: "" });
-        }}>上传</Btn>
-      </div>
+      {open && (
+        <Modal title="创建合同" onClose={() => setOpen(false)} footer={
+          <div className="row">
+            <Btn ghost sm onClick={() => setOpen(false)}>取消</Btn>
+            <Btn sm onClick={() => {
+              const row = Taowo.saveContract(form);
+              if (row) {
+                resetForm();
+                setOpen(false);
+              }
+            }}>上传并创建</Btn>
+          </div>
+        }>
+          <div className="form-2">
+            <Field label="经销商">
+              <select value={form.dealerId} onChange={(e) => setForm({ ...form, dealerId: e.target.value })}>
+                {s.dealers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </Field>
+            <Field label="合同类型">
+              <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+                {types.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="季度">
+              <select value={form.quarter} onChange={(e) => setForm({ ...form, quarter: e.target.value })}>
+                {quarters.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="名称"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="可空，默认类型+季度" /></Field>
+          </div>
+          <div className="row" style={{ marginTop: 12 }}>
+            <label className="btn sm">选择本地文件
+              <input type="file" accept=".pdf,image/*,.html,.txt" hidden onChange={(e) => { upload(e.target.files[0]); e.target.value = ""; }} />
+            </label>
+            <span className="muted">{form.fileName || "未选择文件则生成预览页"}</span>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -1340,7 +1418,7 @@ function OpsApp({ s, path, parts }) {
   else if (path.startsWith("/ops/accounts/") && id) body = <AccountBindDetail s={s} id={id} />;
   else if (path === "/ops/master") body = <MasterView s={s} />;
   else if (path.startsWith("/ops/products") && leaf) body = <ProductEdit s={s} id={leaf} />;
-  else if (path.startsWith("/ops/products")) body = <ProductsOps s={s} type={path.indexOf("futures") >= 0 ? "futures" : "spot"} />;
+  else if (path.startsWith("/ops/products")) body = <ProductsOps key={path.indexOf("futures") >= 0 ? "futures" : "spot"} s={s} type={path.indexOf("futures") >= 0 ? "futures" : "spot"} />;
   else if (path === "/ops/stock") body = <StockOps s={s} />;
   else if (path === "/ops/images" || path === "/ops/media" || path === "/ops/batch") body = <ImageOps s={s} />;
   else if (path === "/ops/orders" || path === "/ops/review") body = <OrderOps s={s} />;
