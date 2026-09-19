@@ -27,8 +27,11 @@
       letter-spacing: -0.011em;
       -webkit-font-smoothing: antialiased;
     }
-    html.lock, body.lock { overflow: hidden; height: 100%; overscroll-behavior: none; }
-    #root:has(.login) { height: 100%; overflow: hidden; }
+    html.lock, body.lock, html.lock #root {
+      overflow: hidden; height: 100%; max-height: 100dvh; overscroll-behavior: none;
+    }
+    #root:has(.login),
+    #root:has(.login) > div { height: 100%; max-height: 100dvh; overflow: hidden; }
     #root:empty {
       display: grid; place-items: center;
       letter-spacing: .2em; font-family: Helvetica, Arial, sans-serif;
@@ -509,14 +512,22 @@
     .row .field { flex: 1; min-width: 200px; margin-bottom: 0; }
 
     .login {
+      position: fixed;
+      inset: 0;
+      width: 100%;
       height: 100%;
+      height: 100dvh;
       max-height: 100dvh;
       overflow: hidden;
       display: grid;
       grid-template-columns: 1.15fr .85fr;
     }
-    .login-visual { background: #111; position: relative; overflow: hidden; min-height: 0; }
-    .login-visual img { width: 100%; height: 100%; object-fit: cover; opacity: .88; }
+    .login-visual { background: #111; position: relative; overflow: hidden; min-height: 0; height: 100%; }
+    .login-visual img {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%; max-width: none;
+      object-fit: cover; object-position: center; opacity: .88;
+    }
     .login-visual .cap {
       position: absolute; left: 48px; bottom: 48px; color: #fff;
       font-size: 40px; letter-spacing: -0.04em; max-width: 420px; font-weight: 400;
@@ -651,8 +662,8 @@
       .page { padding-bottom: 70px; }
       .main { padding: 20px 16px 100px; margin-left: 0; }
       .statrow { grid-template-columns: 1fr 1fr; }
-      .login { grid-template-rows: 34% 1fr; height: 100%; max-height: 100dvh; }
-      .login-visual { min-height: 0; }
+      .login { grid-template-rows: 34% 1fr; height: 100dvh; }
+      .login-visual { min-height: 0; height: auto; }
       .login-visual .cap { font-size: 22px; left: 20px; bottom: 16px; }
       .login-form { padding: 24px 20px; align-content: center; }
       .form-grid { grid-template-columns: 1fr; }
@@ -672,11 +683,11 @@
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
   <script src="js/jszip.min.js"></script>
-  <script src="js/data.js?v=13"></script>
-  <script src="js/store.js?v=13"></script>
-  <script type="text/babel" src="js/ui.jsx?v=13"></script>
-  <script type="text/babel" src="js/mall.jsx?v=13"></script>
-  <script type="text/babel" src="js/ops.jsx?v=13"></script>
-  <script type="text/babel" src="js/app.jsx?v=13"></script>
+  <script src="js/data.js?v=14"></script>
+  <script src="js/store.js?v=14"></script>
+  <script type="text/babel" src="js/ui.jsx?v=14"></script>
+  <script type="text/babel" src="js/mall.jsx?v=14"></script>
+  <script type="text/babel" src="js/ops.jsx?v=14"></script>
+  <script type="text/babel" src="js/app.jsx?v=14"></script>
 </body>
 </html>
