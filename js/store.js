@@ -1,5 +1,5 @@
 window.Taowo = (function () {
-  const KEY = "taowo-b2b-proto-v6";
+  const KEY = "taowo-b2b-proto-v7";
   const seed = window.TAOWO_SEED;
 
   function clone(v) {
@@ -690,11 +690,54 @@ window.Taowo = (function () {
       toast("角色已保存");
     },
     saveUser(u) {
+      if (!u.account || !u.name) {
+        toast("账号和姓名必填", "err");
+        return;
+      }
       const i = state.users.findIndex((x) => x.id === u.id);
-      if (i >= 0) state.users[i] = { ...state.users[i], ...u };
-      else state.users.push({ ...u, id: "u-" + Date.now(), status: "active", password: "123456" });
+      if (i >= 0) {
+        const { password, ...rest } = u;
+        state.users[i] = { ...state.users[i], ...rest };
+        if (password) state.users[i].password = password;
+      } else {
+        if (!u.password) {
+          toast("新建账号必须设置密码", "err");
+          return;
+        }
+        if (state.users.some((x) => x.account === u.account)) {
+          toast("账号已存在", "err");
+          return;
+        }
+        state.users.push({
+          ...u,
+          id: "u-" + Date.now(),
+          status: "active",
+          role: u.role || "ops_merch",
+          created: state.today,
+          lastLogin: "",
+          phone: u.phone || "",
+          email: u.email || "",
+        });
+      }
       emit();
       toast("用户已保存");
+    },
+    setUserPassword(userId, password) {
+      if (!hasPerm("sys.password") && !hasPerm("sys.*")) {
+        toast("当前角色无设置密码权限", "err");
+        return false;
+      }
+      if (!password || String(password).length < 4) {
+        toast("密码至少 4 位", "err");
+        return false;
+      }
+      const u = state.users.find((x) => x.id === userId);
+      if (!u) return false;
+      u.password = String(password);
+      state.logs.unshift({ id: Date.now(), user: state.session.name, type: "修改", result: "修改 " + u.account + " 密码", time: now(), ip: "10.2.1.3" });
+      emit();
+      toast("密码已更新");
+      return true;
     },
     saveOrg(o) {
       const i = state.orgs.findIndex((x) => x.id === o.id);
@@ -745,11 +788,41 @@ window.Taowo = (function () {
       toast("对账单已生成");
     },
     saveContract(c) {
-      const i = state.contracts.findIndex((x) => x.id === c.id);
-      if (i >= 0) state.contracts[i] = { ...state.contracts[i], ...c };
-      else state.contracts.unshift(c);
+      if (!c.dealerId) return toast("请选择经销商", "err");
+      if (!(c.kind || c.type)) return toast("请选择合同类型", "err");
+      if (!c.quarter) return toast("请选择季度", "err");
+      if (!c.fileUrl && !c.id) return toast("请上传合同文件", "err");
+      const dealer = state.dealers.find((d) => d.id === c.dealerId);
+      const row = {
+        id: c.id || ("CT-" + Date.now().toString().slice(-6)),
+        dealerId: c.dealerId,
+        kind: c.kind || c.type,
+        type: c.kind || c.type,
+        quarter: c.quarter,
+        title: c.title || ((c.kind || c.type) + " " + c.quarter),
+        fileName: c.fileName || "",
+        fileUrl: c.fileUrl || "",
+        mime: c.mime || "",
+        uploaded: c.uploaded || now(),
+        status: c.status || "已上传",
+        orders: c.orders || [],
+        from: c.from || "",
+        to: c.to || "",
+      };
+      const i = state.contracts.findIndex((x) => x.id === row.id);
+      if (i >= 0) state.contracts[i] = { ...state.contracts[i], ...row };
+      else state.contracts.unshift(row);
       emit();
-      toast("合同已保存");
+      toast("合同已保存 · " + (dealer?.name || row.dealerId));
+      return row;
+    },
+    contractSrc(c) {
+      if (c?.fileUrl) return c.fileUrl;
+      const dealer = state.dealers.find((d) => d.id === c?.dealerId);
+      const html = "<!doctype html><html><head><meta charset='utf-8'><style>body{font-family:Helvetica,Arial,sans-serif;padding:48px;color:#111;line-height:1.6}h1{font-weight:500}</style></head><body><h1>" +
+        (c?.title || "合同") + "</h1><p>经销商 " + (dealer?.name || c?.dealerId || "") + "</p><p>类型 " + (c?.kind || c?.type || "") + " · 季度 " + (c?.quarter || "") +
+        "</p><p>本页为演示合同正文。本地上传后可在线预览原件并下载。</p></body></html>";
+      return "data:text/html;charset=utf-8," + encodeURIComponent(html);
     },
     importProducts(text) {
       const lines = text.trim().split(/\r?\n/).filter(Boolean);
@@ -879,6 +952,10 @@ window.Taowo = (function () {
       toast("企业认证信息已保存");
     },
     resetPassword(userId) {
+      if (!hasPerm("sys.password") && !hasPerm("sys.*")) {
+        toast("当前角色无设置密码权限", "err");
+        return;
+      }
       const u = state.users.find((x) => x.id === userId);
       if (!u) return;
       u.password = "123456";

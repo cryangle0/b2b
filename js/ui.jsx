@@ -2,7 +2,8 @@ const { useEffect, useMemo, useState } = React;
 
 function Photo({ src, alt, color, className }) {
   const [ok, setOk] = useState(!!src);
-  if (!ok) return <div className={"ph " + (className || "")} style={{ background: color || "#111" }}>{alt}</div>;
+  useEffect(() => { setOk(!!src); }, [src]);
+  if (!src || !ok) return <div className={"ph " + (className || "")} style={{ background: color || "#111" }}>{alt || ""}</div>;
   return <img className={className} src={src} alt={alt || ""} onError={() => setOk(false)} />;
 }
 
@@ -52,10 +53,10 @@ function Field({ label, children }) {
   return <label className="field"><span>{label}</span>{children}</label>;
 }
 
-function Modal({ title, onClose, children, footer }) {
+function Modal({ title, onClose, children, footer, wide }) {
   return (
     <div className="modal" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className={"sheet" + (wide ? " wide" : "")} onClick={(e) => e.stopPropagation()}>
         <div className="hrow"><h1 style={{ fontSize: 24 }}>{title}</h1><button className="iconbtn" onClick={onClose}>×</button></div>
         {children}
         {footer && <div style={{ marginTop: 20 }}>{footer}</div>}
@@ -138,6 +139,107 @@ function downloadText(filename, text, mime) {
   a.click();
 }
 
+function downloadUrl(filename, url) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "download";
+  a.target = "_blank";
+  a.click();
+}
+
+function readLocalFile(file, cb, kinds) {
+  if (!file) return;
+  const ok = !kinds || kinds.test(file.type) || kinds.test(file.name);
+  if (!ok) {
+    Taowo.toast("文件类型不支持", "err");
+    return;
+  }
+  const r = new FileReader();
+  r.onload = () => cb(String(r.result), file.type, file.name);
+  r.readAsDataURL(file);
+}
+
+function dealerName(s, id) {
+  if (!id) return "";
+  const d = (s.dealers || []).find((x) => x.id === id);
+  return d ? d.name : id;
+}
+
+function Pager({ page, total, size, onPage }) {
+  const pages = Math.max(1, Math.ceil((total || 0) / (size || 1)));
+  if (!total) return null;
+  return (
+    <div className="pager">
+      <button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)}>上一页</button>
+      <span>{page} / {pages} · 共 {total} 条</span>
+      <button type="button" disabled={page >= pages} onClick={() => onPage(page + 1)}>下一页</button>
+    </div>
+  );
+}
+
+function GoodsLines({ lines, extra }) {
+  return (
+    <table className="data">
+      <thead><tr><th>图</th><th>款号</th><th>名称</th><th>尺码</th><th>数量</th>{extra ? <th>{extra.title}</th> : null}</tr></thead>
+      <tbody>
+        {(lines || []).map((l, i) => {
+          const p = Taowo.product(l.pid);
+          return (
+            <tr key={i}>
+              <td><div className="goods-thumb"><Photo src={productThumb(p)} alt={p?.name} color={p?.color} /></div></td>
+              <td>{l.pid}</td>
+              <td>{p?.name || ""}</td>
+              <td>{l.size}</td>
+              <td>{l.qty}</td>
+              {extra ? <td>{extra.render(l)}</td> : null}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function ImagePicker({ value, onChange, media }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="img-pick">
+      {value ? <img src={value} alt="" /> : <div className="ph">无图</div>}
+      <div className="row">
+        <label className="btn sm ghost">本地上传
+          <input type="file" accept="image/*" hidden onChange={(e) => {
+            readLocalFile(e.target.files[0], (url) => onChange(url), /image\/|png|jpe?g|webp|gif/i);
+            e.target.value = "";
+          }} />
+        </label>
+        <Btn sm ghost type="button" onClick={() => setOpen(true)}>图片库</Btn>
+        {value ? <Btn sm ghost type="button" onClick={() => onChange("")}>清除</Btn> : null}
+      </div>
+      {open && (
+        <Modal wide title="从图片库选择" onClose={() => setOpen(false)}>
+          <div className="media-grid">
+            {(media || []).map((m) => (
+              <button type="button" key={m.id} className="media-cell" onClick={() => { onChange(m.src); setOpen(false); }}>
+                <img src={m.src} alt="" />
+                <span>{m.name}</span>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function contractPreview(c, s) {
+  if (c?.fileUrl) return c.fileUrl;
+  const name = dealerName(s || { dealers: [] }, c?.dealerId);
+  const html = "<!doctype html><html><head><meta charset='utf-8'><style>body{font-family:Helvetica,Arial,sans-serif;padding:48px;color:#111;line-height:1.6}h1{font-weight:500}</style></head><body><h1>" +
+    (c?.title || "合同") + "</h1><p>经销商 " + name + "</p><p>类型 " + (c?.kind || c?.type || "") + " · 季度 " + (c?.quarter || "") +
+    "</p><p>本页为演示合同正文。本地上传后可在线预览原件并下载。</p></body></html>";
+  return "data:text/html;charset=utf-8," + encodeURIComponent(html);
+}
+
 function productThumb(p) {
   return p?.images?.[0] || "";
 }
@@ -176,5 +278,5 @@ function filterProducts(products, { type, fair, q, brand, ip, cat, sub, wave, se
 }
 
 Object.assign(window, {
-  Photo, Icon, go, useHash, useStore, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, Toasts, DataTable, Qty, downloadText, productThumb, filterProducts, groupOrderLines, qtyOfSize,
+  Photo, Icon, go, useHash, useStore, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, Toasts, DataTable, Qty, downloadText, downloadUrl, readLocalFile, dealerName, Pager, GoodsLines, ImagePicker, contractPreview, productThumb, filterProducts, groupOrderLines, qtyOfSize,
 });

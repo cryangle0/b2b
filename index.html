@@ -14,6 +14,7 @@
       --paper: #ffffff;
       --danger: #ba0c2f;
       --nav: 60px;
+      --subnav: 48px;
       --proto: 0px;
     }
     * { box-sizing: border-box; }
@@ -157,7 +158,23 @@
     label.btn { cursor: pointer; position: relative; overflow: hidden; }
 
     .page { padding-top: var(--nav); min-height: 100%; }
-    .mall-shell.has-notice .page { padding-top: calc(var(--nav) + 36px); }
+    .mall-shell .page { padding-top: calc(var(--nav) + var(--subnav)); }
+    .mall-shell.has-notice .page { padding-top: calc(var(--nav) + var(--subnav) + 36px); }
+    .mall-subnav {
+      height: var(--subnav);
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+    .mall-subnav .wrap {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      font-size: 16px;
+    }
+    .mall-subnav a { padding: 8px 0; font-weight: 500; }
+    .mall-subnav a.active { box-shadow: inset 0 -2px 0 #111; }
+    .mall-subnav .nav-drop .drop { z-index: 60; }
     .wrap { width: min(1440px, calc(100% - 72px)); margin: 0 auto; }
     .hero {
       height: min(62vh, 620px);
@@ -329,16 +346,16 @@
       gap: 40px;
       min-height: calc(100vh - var(--nav) - 80px);
     }
-    .pdp-media { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+    .pdp-media { display: grid; grid-template-columns: 1fr; gap: 4px; align-items: start; }
     .pdp-media.stacked { grid-template-columns: 1fr; }
     .pdp-thumbs { display: flex; flex-direction: column; gap: 8px; }
-    .pdp-thumbs.below { flex-direction: row; flex-wrap: wrap; }
-    .pdp-thumbs button { border: 1px solid transparent; padding: 0; background: #e8e8e8; }
+    .pdp-thumbs.below { flex-direction: row; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .pdp-thumbs button { border: 2px solid transparent; padding: 0; background: #e8e8e8; }
     .pdp-thumbs button.on { border-color: #111; }
-    .pdp-thumbs img, .pdp-thumbs .ph { width: 72px; height: 72px; object-fit: cover; }
-    .pdp-hero { background: #e8e8e8; min-height: 520px; }
-    .pdp-hero img, .pdp-hero .ph { width: 100%; height: 100%; object-fit: cover; min-height: 520px; }
-    .pdp-buy { padding: 8px 0 40px; position: sticky; top: calc(var(--nav) + 12px); height: fit-content; }
+    .pdp-thumbs img, .pdp-thumbs .ph { width: 112px; height: 112px; object-fit: cover; }
+    .pdp-hero { background: #e8e8e8; }
+    .pdp-hero img, .pdp-hero .ph { width: 100%; aspect-ratio: 1; object-fit: cover; min-height: 0; }
+    .pdp-buy { padding: 8px 0 40px; position: sticky; top: calc(var(--nav) + var(--subnav) + 12px); height: fit-content; }
     .pdp-buy h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.3; }
     .stars { display: flex; align-items: center; gap: 6px; margin: 8px 0; color: #c4a000; font-size: 14px; }
     .stars b, .stars em { color: #111; font-style: normal; font-weight: 500; }
@@ -425,8 +442,11 @@
     .media-cell img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; margin: 6px 0; }
     .media-cell span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .size input {
-      width: 100%; border: 0; outline: none; font-size: 18px; background: transparent;
+      width: 100%; height: 34px; padding: 0 8px;
+      border: 1.5px solid #111; outline: none; font-size: 16px; background: #fff;
     }
+    .size.off input { border-color: #888; background: #fff; }
+    .size .wish-hint { font-size: 12px; color: var(--danger); margin-top: 4px; }
 
     table.data {
       width: 100%;
@@ -547,6 +567,21 @@
       background: #fff; width: min(720px, 100%); max-height: 86vh; overflow: auto;
       padding: 32px;
     }
+    .sheet.wide { width: min(960px, 100%); }
+    .img-pick { display: grid; gap: 8px; }
+    .img-pick > img, .img-pick > .ph { width: 160px; height: 100px; object-fit: cover; background: #eee; }
+    .floor-card { border: 1px solid var(--line); padding: 16px; margin-bottom: 12px; }
+    .prod-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; max-height: 280px; overflow: auto; }
+    .prod-pick label { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); padding: 6px; font-size: 12px; }
+    .prod-pick img, .prod-pick .ph { width: 40px; height: 40px; object-fit: cover; flex: none; }
+    .pager { display: flex; align-items: center; gap: 12px; margin: 16px 0; font-size: 13px; }
+    .pager button { border: 1px solid #111; background: #fff; height: 32px; padding: 0 12px; }
+    .pager button:disabled { opacity: .35; }
+    .goods-thumb { width: 56px; height: 56px; overflow: hidden; background: #eee; }
+    .goods-thumb img, .goods-thumb .ph { width: 56px; height: 56px; object-fit: cover; display: block; }
+    .wish-row { display: flex; gap: 16px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+    .form-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+    .contract-view { width: 100%; min-height: 70vh; border: 1px solid var(--line); background: #fafafa; }
     .empty { padding: 80px 0; text-align: center; color: var(--mute); }
     .empty h3 { color: #111; font-weight: 400; font-size: 28px; margin-bottom: 8px; }
 
@@ -603,7 +638,9 @@
       .split, .pdp, .login, .ops, .plp, .pdp-media { grid-template-columns: 1fr; }
       .home-cats { flex-direction: column; align-items: flex-start; gap: 10px; }
       .pdp-thumbs { flex-direction: row; }
-      .pdp-hero, .pdp-hero img { min-height: 320px; }
+      .pdp-hero img, .pdp-hero .ph { min-height: 0; }
+      .form-2 { grid-template-columns: 1fr; }
+      .mall-subnav .wrap { gap: 18px; font-size: 14px; }
       .side { display: none; }
       .ops.show-side .side { display: block; position: fixed; inset: 0 auto 0 0; width: 80%; background: #fff; z-index: 50; }
       .pdp-buy { padding: 24px 16px 120px; position: static; }
@@ -633,11 +670,11 @@
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
   <script src="js/jszip.min.js"></script>
-  <script src="js/data.js?v=9"></script>
-  <script src="js/store.js?v=9"></script>
-  <script type="text/babel" src="js/ui.jsx?v=9"></script>
-  <script type="text/babel" src="js/mall.jsx?v=9"></script>
-  <script type="text/babel" src="js/ops.jsx?v=10"></script>
-  <script type="text/babel" src="js/app.jsx?v=9"></script>
+  <script src="js/data.js?v=12"></script>
+  <script src="js/store.js?v=12"></script>
+  <script type="text/babel" src="js/ui.jsx?v=12"></script>
+  <script type="text/babel" src="js/mall.jsx?v=12"></script>
+  <script type="text/babel" src="js/ops.jsx?v=12"></script>
+  <script type="text/babel" src="js/app.jsx?v=12"></script>
 </body>
 </html>

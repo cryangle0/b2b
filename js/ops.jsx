@@ -1,5 +1,9 @@
 const { useState } = React;
-const { Icon, Photo, go, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, DataTable, downloadText, LoginView, productThumb, groupOrderLines, qtyOfSize } = window;
+const { Icon, Photo, go, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, DataTable, downloadText, downloadUrl, readLocalFile, dealerName, Pager, GoodsLines, ImagePicker, LoginView, productThumb, groupOrderLines, qtyOfSize } = window;
+
+function canSetOrgPassword() {
+  return Taowo.hasPerm("sys.password") || Taowo.hasPerm("sys.*");
+}
 
 function opsAllowed(role, href) {
   if (role === "ops_admin") return true;
@@ -75,46 +79,48 @@ function OpsToday({ s }) {
 
 function CmsView({ s }) {
   const cms = s.cms;
+  const live = s.products.filter((p) => p.status === "live");
   const [device, setDevice] = useState("PC");
   const [nav, setNav] = useState((device === "H5" ? cms.h5Nav : cms.nav).join(" / "));
   const [productMenu, setProductMenu] = useState((cms.productMenu || []).map((x) => x.label + "|" + x.href).join("\n"));
   const [assetMenu, setAssetMenu] = useState((cms.assetMenu || []).map((x) => x.label + "|" + x.href).join("\n"));
   const [catNav, setCatNav] = useState((cms.categoryNav || []).map((x) => x.label + "|" + x.href).join("\n"));
-  const [hero, setHero] = useState(cms.hero.map((h) => [h.title, h.sub, h.href, h.img].join("|")).join("\n"));
-  const [floors, setFloors] = useState((cms.floors || []).map((f) => f.title + "|" + (f.query?.type || (f.query?.fair ? "fair" : "spot"))).join("\n"));
-  const [banner, setBanner] = useState([cms.banner.title, cms.banner.sub, cms.banner.href, cms.banner.img].join("|"));
+  const [heroes, setHeroes] = useState((cms.hero || []).map((h) => ({ ...h })));
+  const [banner, setBanner] = useState({ ...cms.banner });
+  const [floors, setFloors] = useState((cms.floors || []).map((f, i) => ({
+    id: f.id || ("f" + (i + 1)),
+    kind: f.kind || (f.img && !f.productIds ? "image" : "products"),
+    title: f.title || "",
+    href: f.href || "#/shop/spot",
+    img: f.img || "",
+    productIds: f.productIds ? f.productIds.slice() : [],
+    query: f.query || null,
+  })));
   function parseLinks(text) {
     return text.split(/\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
       const [label, href] = l.split("|").map((x) => (x || "").trim());
       return { label, href: href || "#/" };
     });
   }
+  function setFloor(i, patch) {
+    setFloors(floors.map((f, n) => n === i ? { ...f, ...patch } : f));
+  }
   function publish() {
-    const heroRows = hero.split(/\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
-      const [title, sub, href, img] = l.split("|").map((x) => (x || "").trim());
-      return { title, sub, href: href || "#/", img };
-    });
-    const floorRows = floors.split(/\n/).map((l) => l.trim()).filter(Boolean).map((l, i) => {
-      const [title, type] = l.split("|").map((x) => (x || "").trim());
-      const query = type === "fair" ? { fair: true } : { type: type || "spot" };
-      return { id: "f" + (i + 1), title, query };
-    });
-    const [bt, bs, bh, bi] = banner.split("|").map((x) => (x || "").trim());
     const parts = nav.split(/[\/,，]/).map((x) => x.trim()).filter(Boolean);
     Taowo.saveCms({
       ...(device === "H5" ? { h5Nav: parts } : { nav: parts }),
       productMenu: parseLinks(productMenu),
       assetMenu: parseLinks(assetMenu),
       categoryNav: parseLinks(catNav),
-      hero: heroRows.length ? heroRows : cms.hero,
-      floors: floorRows.length ? floorRows : cms.floors,
-      banner: { title: bt, sub: bs, href: bh, img: bi },
+      hero: heroes,
+      floors: floors.map((f, i) => ({ ...f, id: f.id || ("f" + (i + 1)) })),
+      banner,
     });
   }
   return (
     <div>
       <div className="hrow">
-        <div><h1>页面装修</h1><p>真实配置：保存后商城顶栏、分类行、首屏与楼层立即读取。PC / H5 导航可分别发布。</p></div>
+        <div><h1>页面装修</h1><p>商品楼层从已上架商品勾选；轮播、专场和其他图片楼层支持本地上传或图片库。</p></div>
         <div className="row">
           <Btn sm ghost onClick={() => {
             const next = device === "PC" ? "H5" : "PC";
@@ -125,14 +131,71 @@ function CmsView({ s }) {
           <Btn sm onClick={publish}>发布配置</Btn>
         </div>
       </div>
-      <Field label={device + " 顶栏导航（用 / 分隔）"}><input value={nav} onChange={(e) => setNav(e.target.value)} /></Field>
-      <Field label="产品下拉（每行：名称|#锚点）"><textarea value={productMenu} onChange={(e) => setProductMenu(e.target.value)} rows={4} /></Field>
-      <Field label="资产下拉（每行：名称|#锚点）"><textarea value={assetMenu} onChange={(e) => setAssetMenu(e.target.value)} rows={4} /></Field>
-      <Field label="首页分类一行（产品 / 订单 / 资产；名称为产品时自动带现货/期货/订货会下拉）"><textarea value={catNav} onChange={(e) => setCatNav(e.target.value)} rows={4} /></Field>
-      <Field label="首屏轮播（每行：标题|说明|#链接|图片URL）"><textarea value={hero} onChange={(e) => setHero(e.target.value)} rows={5} /></Field>
-      <Field label="首页楼层（每行：标题|spot 或 futures 或 fair）"><textarea value={floors} onChange={(e) => setFloors(e.target.value)} rows={3} /></Field>
-      <Field label="专场条（标题|说明|#链接|图片URL）"><input value={banner} onChange={(e) => setBanner(e.target.value)} /></Field>
-      <p className="muted">发布后回到商城首页即可看到新文案与导航。H5 为同一套响应式，订货会现场可用手机下单。</p>
+      <Field label="首页导航（产品 / 订单 / 资产，已合并到原分类行位置）"><textarea value={catNav} onChange={(e) => setCatNav(e.target.value)} rows={3} /></Field>
+      <Field label="产品下拉（每行：名称|#锚点）"><textarea value={productMenu} onChange={(e) => setProductMenu(e.target.value)} rows={3} /></Field>
+      <Field label="资产下拉（每行：名称|#锚点）"><textarea value={assetMenu} onChange={(e) => setAssetMenu(e.target.value)} rows={3} /></Field>
+      <h2 style={{ fontSize: 18, margin: "24px 0 12px", fontWeight: 500 }}>首屏轮播</h2>
+      {heroes.map((h, i) => (
+        <div className="floor-card" key={i}>
+          <div className="form-2">
+            <Field label="标题"><input value={h.title} onChange={(e) => setHeroes(heroes.map((x, n) => n === i ? { ...x, title: e.target.value } : x))} /></Field>
+            <Field label="说明"><input value={h.sub} onChange={(e) => setHeroes(heroes.map((x, n) => n === i ? { ...x, sub: e.target.value } : x))} /></Field>
+            <Field label="链接"><input value={h.href} onChange={(e) => setHeroes(heroes.map((x, n) => n === i ? { ...x, href: e.target.value } : x))} /></Field>
+          </div>
+          <Field label="图片"><ImagePicker value={h.img} media={s.media} onChange={(img) => setHeroes(heroes.map((x, n) => n === i ? { ...x, img } : x))} /></Field>
+        </div>
+      ))}
+      <h2 style={{ fontSize: 18, margin: "24px 0 12px", fontWeight: 500 }}>专场条</h2>
+      <div className="floor-card">
+        <div className="form-2">
+          <Field label="标题"><input value={banner.title || ""} onChange={(e) => setBanner({ ...banner, title: e.target.value })} /></Field>
+          <Field label="说明"><input value={banner.sub || ""} onChange={(e) => setBanner({ ...banner, sub: e.target.value })} /></Field>
+          <Field label="链接"><input value={banner.href || ""} onChange={(e) => setBanner({ ...banner, href: e.target.value })} /></Field>
+        </div>
+        <Field label="图片"><ImagePicker value={banner.img} media={s.media} onChange={(img) => setBanner({ ...banner, img })} /></Field>
+      </div>
+      <div className="hrow" style={{ marginTop: 28 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 500 }}>首页楼层</h2>
+        <div className="row">
+          <Btn sm ghost onClick={() => setFloors(floors.concat([{ id: "f" + Date.now(), kind: "products", title: "新商品楼层", productIds: [], href: "#/shop/spot", img: "" }]))}>加商品楼层</Btn>
+          <Btn sm ghost onClick={() => setFloors(floors.concat([{ id: "f" + Date.now(), kind: "image", title: "新图片楼层", img: "", href: "#/shop/spot", productIds: [] }]))}>加图片楼层</Btn>
+        </div>
+      </div>
+      {floors.map((f, i) => (
+        <div className="floor-card" key={f.id}>
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <b>{f.kind === "image" ? "图片楼层" : "商品楼层"}</b>
+            <button className="linkish" onClick={() => setFloors(floors.filter((_, n) => n !== i))}>删除</button>
+          </div>
+          <Field label="标题"><input value={f.title} onChange={(e) => setFloor(i, { title: e.target.value })} /></Field>
+          {f.kind === "image" ? (
+            <>
+              <Field label="链接"><input value={f.href} onChange={(e) => setFloor(i, { href: e.target.value })} /></Field>
+              <Field label="图片"><ImagePicker value={f.img} media={s.media} onChange={(img) => setFloor(i, { img })} /></Field>
+            </>
+          ) : (
+            <div style={{ marginTop: 8 }}>
+              <div className="muted" style={{ marginBottom: 8 }}>从已上架商品选择（{(f.productIds || []).length}）</div>
+              <div className="prod-pick">
+                {live.map((p) => {
+                  const on = (f.productIds || []).includes(p.id);
+                  return (
+                    <label key={p.id}>
+                      <input type="checkbox" checked={on} onChange={() => {
+                        const ids = f.productIds || [];
+                        setFloor(i, { productIds: on ? ids.filter((x) => x !== p.id) : ids.concat(p.id) });
+                      }} />
+                      <Photo src={productThumb(p)} alt="" color={p.color} />
+                      <span>{p.id}<br />{p.nameZh || p.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+      <p className="muted">发布后商城首页立即读取所选商品与图片。</p>
     </div>
   );
 }
@@ -217,14 +280,19 @@ function accountTpl() {
 
 function AccountsOps({ s }) {
   const [report, setReport] = useState(null);
-  const rows = s.users.filter((u) => String(u.role).startsWith("dealer") && u.status !== "pending");
+  const [tab, setTab] = useState("main");
+  const [page, setPage] = useState(1);
+  const pageSize = 3;
+  const all = s.users.filter((u) => String(u.role).startsWith("dealer") && u.status !== "pending");
+  const rows = all.filter((u) => tab === "sub" ? u.role === "dealer_sub" : u.role !== "dealer_sub");
+  const slice = rows.slice((page - 1) * pageSize, page * pageSize);
   function runImport(text) {
     setReport(Taowo.importDealerAccounts(text));
   }
   return (
     <div>
       <div className="hrow">
-        <div><h1>账号绑定</h1><p>已审核通过的经销商账号。可下载模板批量导入；绑定列填档案号或企业名，空着则不绑。</p></div>
+        <div><h1>账号绑定</h1><p>主账号与子账号分页展示。绑定列显示企业名称，点进详情改绑档案。</p></div>
       </div>
       <div className="row" style={{ marginBottom: 16 }}>
         <Btn sm ghost onClick={() => { downloadText("经销商账号导入模板.csv", accountTpl(), "text/csv"); Taowo.toast("已下载模板，填写后上传 CSV"); }}>下载导入模板</Btn>
@@ -240,7 +308,7 @@ function AccountsOps({ s }) {
           }} />
         </label>
       </div>
-      <details open style={{ marginBottom: 16 }}>
+      <details style={{ marginBottom: 16 }}>
         <summary>模板说明与预览导入</summary>
         <p className="muted">表头必须有账号、姓名。角色填主账号或子账号。绑定经销商填档案号、企业名或 ERP 号；找不到档案则该行失败，不会半写入。</p>
         <Field label="或粘贴 CSV">
@@ -259,6 +327,10 @@ function AccountsOps({ s }) {
           )}
         </div>
       )}
+      <div className="tabs">
+        <button className={tab === "main" ? "on" : ""} onClick={() => { setTab("main"); setPage(1); }}>主账号 {all.filter((u) => u.role !== "dealer_sub").length}</button>
+        <button className={tab === "sub" ? "on" : ""} onClick={() => { setTab("sub"); setPage(1); }}>子账号 {all.filter((u) => u.role === "dealer_sub").length}</button>
+      </div>
       <DataTable
         onRow={(r) => go("/ops/accounts/" + r.id)}
         columns={[
@@ -266,11 +338,13 @@ function AccountsOps({ s }) {
           { key: "name", title: "姓名" },
           { key: "phone", title: "手机" },
           { key: "role", title: "角色", render: (r) => r.role === "dealer_sub" ? "子账号" : "主账号" },
-          { key: "dealerId", title: "绑定经销商", render: (r) => r.dealerId || "" },
+          { key: "dealer", title: "绑定经销商", render: (r) => r.dealerId ? dealerName(s, r.dealerId) : "" },
+          { key: "dealerId", title: "档案号", render: (r) => r.dealerId || "" },
           { key: "status", title: "状态", render: (r) => accountStatus(r.status) },
         ]}
-        rows={rows}
+        rows={slice}
       />
+      <Pager page={page} total={rows.length} size={pageSize} onPage={setPage} />
     </div>
   );
 }
@@ -336,7 +410,6 @@ function ProductsOps({ s, type }) {
   const futures = type === "futures";
   const [f, setF] = useState({ q: "", brand: "", ip: "", cat: "", sub: "", wave: "", status: "", orderable: "" });
   const [sel, setSel] = useState([]);
-  const [edit, setEdit] = useState(null);
   const [csv, setCsv] = useState("款号,名称,年份,季节,品牌,大类,小类,性别,波次,价格,交期,期货有效期\nTW-1003,Studio Fleece,2026,FW26,Studio,服装,上衣,中性,02,248,期货 45 天,2026-12-31");
   const [validTo, setValidTo] = useState("2026-12-31");
   const [fromId, setFromId] = useState(s.products.find((p) => p.type === "spot")?.id || "");
@@ -435,20 +508,98 @@ function ProductsOps({ s, type }) {
         }} />
         <Btn sm onClick={() => Taowo.importProducts(csv)}>导入商品</Btn>
       </details>
-      <DataTable onRow={(r) => setEdit({ ...r })} columns={cols} rows={rows} />
-      {edit && (
-        <Modal title={edit.id} onClose={() => setEdit(null)} footer={<Btn onClick={() => { Taowo.upsertProduct(edit); setEdit(null); }}>保存</Btn>}>
-          <Field label="名称"><input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
-          <Field label="批发价"><input type="number" value={edit.price} onChange={(e) => setEdit({ ...edit, price: Number(e.target.value) })} /></Field>
-          {edit.type === "futures" && (
-            <>
-              <Field label="有效期至"><input value={edit.validTo || ""} onChange={(e) => setEdit({ ...edit, validTo: e.target.value })} /></Field>
-              <Field label="交期"><input value={edit.lead} onChange={(e) => setEdit({ ...edit, lead: e.target.value })} /></Field>
-            </>
-          )}
-          {edit.type === "spot" && <p className="muted">现货不设有效期。</p>}
-        </Modal>
-      )}
+      <DataTable onRow={(r) => go("/ops/products/" + (futures ? "futures" : "spot") + "/" + r.id)} columns={cols} rows={rows} />
+    </div>
+  );
+}
+
+function ProductEdit({ s, id }) {
+  const src = s.products.find((p) => p.id === id);
+  const [edit, setEdit] = useState(src ? JSON.parse(JSON.stringify(src)) : null);
+  if (!src || !edit) return <Empty title="商品不存在" action={<Btn onClick={() => go("/ops/products/spot")}>返回</Btn>} />;
+  const d = s.dictionaries;
+  function set(k, v) { setEdit({ ...edit, [k]: v }); }
+  function save() {
+    const sizes = String(edit.sizesText != null ? edit.sizesText : (edit.sizes || []).join(",")).split(/[,，\s]+/).filter(Boolean);
+    const stock = { ...(edit.stock || {}) };
+    sizes.forEach((sz) => { if (stock[sz] == null) stock[sz] = 0; });
+    Taowo.upsertProduct({
+      ...edit,
+      sizes,
+      stock,
+      price: Number(edit.price) || 0,
+      retail: Number(edit.retail) || 0,
+      year: Number(edit.year) || 2026,
+      orderable: edit.orderable === true || edit.orderable === "true",
+      fair: edit.fair === true || edit.fair === "true",
+      images: Array.isArray(edit.images) ? edit.images : String(edit.images || "").split(/[,，\s]+/).filter(Boolean),
+    });
+    go("/ops/products/" + (edit.type === "futures" ? "futures" : "spot"));
+  }
+  const text = ["id", "name", "nameZh", "brand", "ip", "cat", "sub", "series", "season", "gender", "wave", "lead", "warehouse", "color", "colorName", "badge", "video", "desc"];
+  const labels = { id: "款号", name: "英文名", nameZh: "中文名", brand: "品牌", ip: "IP", cat: "大类", sub: "小类", series: "系列", season: "季节", gender: "性别", wave: "波次", lead: "交期", warehouse: "仓库", color: "色值", colorName: "色名", badge: "角标", video: "视频", desc: "描述" };
+  return (
+    <div>
+      <div className="hrow">
+        <div><h1>{edit.id}</h1><p>现货 / 期货全部字段，保存后商城立即读取。</p></div>
+        <div className="row">
+          <Btn sm ghost onClick={() => go("/ops/products/" + (edit.type === "futures" ? "futures" : "spot"))}>返回列表</Btn>
+          <Btn sm onClick={save}>保存</Btn>
+        </div>
+      </div>
+      <div className="form-2">
+        {text.map((k) => (
+          <Field key={k} label={labels[k]}>
+            {k === "desc" ? <textarea rows={3} value={edit[k] || ""} onChange={(e) => set(k, e.target.value)} /> : <input value={edit[k] || ""} onChange={(e) => set(k, e.target.value)} />}
+          </Field>
+        ))}
+        <Field label="类型">
+          <select value={edit.type} onChange={(e) => set("type", e.target.value)}>
+            <option value="spot">现货</option>
+            <option value="futures">期货</option>
+          </select>
+        </Field>
+        <Field label="年份"><input type="number" value={edit.year || ""} onChange={(e) => set("year", e.target.value)} /></Field>
+        <Field label="批发价"><input type="number" value={edit.price} onChange={(e) => set("price", e.target.value)} /></Field>
+        <Field label="建议零售"><input type="number" value={edit.retail || ""} onChange={(e) => set("retail", e.target.value)} /></Field>
+        <Field label="上下架">
+          <select value={edit.status} onChange={(e) => set("status", e.target.value)}>
+            <option value="live">在售</option>
+            <option value="off">下架</option>
+          </select>
+        </Field>
+        <Field label="可订">
+          <select value={String(!!edit.orderable)} onChange={(e) => set("orderable", e.target.value === "true")}>
+            <option value="true">可订</option>
+            <option value="false">不可订</option>
+          </select>
+        </Field>
+        <Field label="订货会">
+          <select value={String(!!edit.fair)} onChange={(e) => set("fair", e.target.value === "true")}>
+            <option value="true">是</option>
+            <option value="false">否</option>
+          </select>
+        </Field>
+        <Field label="评分"><input value={edit.rating || ""} onChange={(e) => set("rating", e.target.value)} /></Field>
+        <Field label="评价数"><input value={edit.reviews || ""} onChange={(e) => set("reviews", e.target.value)} /></Field>
+        {edit.type === "futures" && (
+          <>
+            <Field label="有效期自"><input value={edit.validFrom || ""} onChange={(e) => set("validFrom", e.target.value)} /></Field>
+            <Field label="有效期至"><input value={edit.validTo || ""} onChange={(e) => set("validTo", e.target.value)} /></Field>
+          </>
+        )}
+        <Field label="尺码（逗号分隔）"><input value={edit.sizesText != null ? edit.sizesText : (edit.sizes || []).join(",")} onChange={(e) => set("sizesText", e.target.value)} /></Field>
+        <Field label="图片 URL（逗号分隔）"><input value={Array.isArray(edit.images) ? edit.images.join(",") : (edit.images || "")} onChange={(e) => set("images", e.target.value.split(/[,，\s]+/).filter(Boolean))} /></Field>
+      </div>
+      <h2 style={{ fontSize: 18, margin: "24px 0 12px", fontWeight: 500 }}>各尺码库存</h2>
+      <div className="form-2">
+        {(edit.sizesText != null ? edit.sizesText.split(/[,，\s]+/).filter(Boolean) : (edit.sizes || [])).map((sz) => (
+          <Field key={sz} label={sz}>
+            <input type="number" value={(edit.stock && edit.stock[sz]) || 0} onChange={(e) => setEdit({ ...edit, stock: { ...(edit.stock || {}), [sz]: Number(e.target.value) || 0 } })} />
+          </Field>
+        ))}
+      </div>
+      <p className="muted" style={{ marginTop: 12 }}>字典可选：{(d.brands || []).join(" / ")}</p>
     </div>
   );
 }
@@ -782,10 +933,7 @@ function ShipDetail({ s, id }) {
         <div><h1>{sh.id}</h1><p>{sh.orderId} · {sh.date} · {sh.express} {sh.tracking}</p></div>
         <Btn sm ghost onClick={() => go("/ops/ship")}>返回列表</Btn>
       </div>
-      <table className="data">
-        <thead><tr><th>款号</th><th>尺码</th><th>本次发货</th></tr></thead>
-        <tbody>{sh.lines.map((l, i) => <tr key={i}><td>{l.pid}</td><td>{l.size}</td><td>{l.qty}</td></tr>)}</tbody>
-      </table>
+      <GoodsLines lines={sh.lines} />
       <h2 style={{ margin: "24px 0 8px", fontSize: 20, fontWeight: 500 }}>物流</h2>
       {tracks.length ? tracks.map((t, i) => <div key={i} className="muted">{t.t} {t.e}</div>) : <p className="muted">暂无轨迹</p>}
     </div>
@@ -800,10 +948,12 @@ function WishOps({ s }) {
       <DataTable
         onRow={(r) => go("/ops/wish/" + encodeURIComponent(r.id))}
         columns={[
+          { key: "img", title: "图", render: (r) => { const p = Taowo.product(r.pid); return <div className="goods-thumb"><Photo src={productThumb(p)} alt={p?.name} color={p?.color} /></div>; } },
           { key: "pid", title: "款号" },
+          { key: "name", title: "名称", render: (r) => Taowo.product(r.pid)?.name || "" },
           { key: "size", title: "尺码" },
           { key: "qty", title: "数量" },
-          { key: "dealerId", title: "经销商" },
+          { key: "dealerId", title: "经销商", render: (r) => dealerName(s, r.dealerId) },
           { key: "note", title: "说明" },
           { key: "time", title: "时间" },
         ]}
@@ -824,11 +974,12 @@ function WishDetail({ s, id }) {
         <div><h1>{w.pid} · {w.size}</h1><p>{p?.name} · {w.dealerId}</p></div>
         <Btn sm ghost onClick={() => go("/ops/wish")}>返回列表</Btn>
       </div>
-      <div className="kvs">
-        <i>数量</i><b>{w.qty || 1}</b>
+      <GoodsLines lines={[{ pid: w.pid, size: w.size, qty: w.qty || 1 }]} />
+      <div className="kvs" style={{ marginTop: 16 }}>
+        <i>经销商</i><b>{dealerName(s, w.dealerId)}</b>
         <i>说明</i><b>{w.note}</b>
         <i>时间</i><b>{w.time}</b>
-        <i>可订</i><b>{p ? (p.stock[w.size] || 0) : "—"}</b>
+        <i>当前可订</i><b>{p ? (p.stock[w.size] || 0) : "—"}</b>
       </div>
       <div style={{ marginTop: 16 }}><Btn sm onClick={() => Taowo.restockNotice(w.pid)}>模拟到货提醒</Btn></div>
     </div>
@@ -864,10 +1015,11 @@ function ReturnDetail({ s, id }) {
         <Btn sm ghost onClick={() => go("/ops/returns")}>返回列表</Btn>
       </div>
       <div className="kvs">
-        <i>经销商</i><b>{r.dealerId}</b>
+        <i>经销商</i><b>{dealerName(s, r.dealerId)}</b>
         <i>原因</i><b>{r.reason}</b>
-        <i>明细</i><b>{(r.lines || []).map((l) => l.pid + " " + l.size + "×" + l.qty).join("，") || "—"}</b>
       </div>
+      <h2 style={{ fontSize: 18, margin: "20px 0 8px", fontWeight: 500 }}>商品明细</h2>
+      <GoodsLines lines={r.lines || []} />
       {r.status === "pending" ? (
         <div className="row" style={{ marginTop: 16 }}>
           <Btn sm onClick={() => Taowo.reviewReturn(r.id, "approved")}>通过</Btn>
@@ -888,22 +1040,85 @@ function PayOps({ s }) {
 }
 
 function ContractOps({ s }) {
-  const [title, setTitle] = useState("新合同");
-  const [cid, setCid] = useState(s.contracts[0]?.id || "");
-  const [oid, setOid] = useState(s.orders.find((o) => o.type !== "erp")?.id || "");
+  const types = s.dictionaries.contractTypes || ["框架合同", "期货合同", "现货合同", "补充协议"];
+  const quarters = s.dictionaries.quarters || ["2026Q3", "2026Q4"];
+  const [form, setForm] = useState({
+    dealerId: s.dealers[0]?.id || "",
+    kind: types[0],
+    quarter: quarters[2] || quarters[0],
+    title: "",
+    fileName: "",
+    fileUrl: "",
+    mime: "",
+  });
+  function upload(file) {
+    readLocalFile(file, (url, mime, name) => setForm({ ...form, fileUrl: url, mime, fileName: name }), /pdf|image\/|png|jpe?g|webp|html/i);
+  }
   return (
     <div>
-      <div className="hrow"><div><h1>合同</h1><p>维护合同及与订单的关联</p></div></div>
-      <DataTable columns={[{ key: "id", title: "编号" }, { key: "title", title: "名称" }, { key: "dealerId", title: "经销商" }, { key: "status", title: "状态" }, { key: "orders", title: "订单", render: (r) => (r.orders || []).join(", ") }]} rows={s.contracts} />
-      <div className="row" style={{ marginTop: 16 }}>
-        <Field label="名称"><input value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
-        <Btn sm onClick={() => Taowo.saveContract({ id: "CT-" + Date.now().toString().slice(-4), dealerId: "D-10086", title, orders: [], status: "草稿", from: s.today, to: "2026-12-31", file: "draft.pdf" })}>新建</Btn>
+      <div className="hrow"><div><h1>合同</h1><p>本地上传。列表展示经销商、类型、季度；点进明细在线查看并下载。</p></div></div>
+      <DataTable
+        onRow={(r) => go("/ops/contracts/" + r.id)}
+        columns={[
+          { key: "dealer", title: "经销商名称", render: (r) => dealerName(s, r.dealerId) },
+          { key: "kind", title: "合同类型", render: (r) => r.kind || r.type || "" },
+          { key: "quarter", title: "季度", render: (r) => r.quarter || "" },
+          { key: "title", title: "名称" },
+          { key: "fileName", title: "文件" },
+          { key: "status", title: "状态" },
+        ]}
+        rows={s.contracts}
+      />
+      <h2 style={{ fontSize: 18, margin: "28px 0 12px", fontWeight: 500 }}>上传合同</h2>
+      <div className="form-2">
+        <Field label="经销商">
+          <select value={form.dealerId} onChange={(e) => setForm({ ...form, dealerId: e.target.value })}>
+            {s.dealers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        </Field>
+        <Field label="合同类型">
+          <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+            {types.map((t) => <option key={t}>{t}</option>)}
+          </select>
+        </Field>
+        <Field label="季度">
+          <select value={form.quarter} onChange={(e) => setForm({ ...form, quarter: e.target.value })}>
+            {quarters.map((t) => <option key={t}>{t}</option>)}
+          </select>
+        </Field>
+        <Field label="名称"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="可空，默认类型+季度" /></Field>
       </div>
-      <div className="row" style={{ marginTop: 12 }}>
-        <Field label="合同"><select value={cid} onChange={(e) => setCid(e.target.value)}>{s.contracts.map((c) => <option key={c.id}>{c.id}</option>)}</select></Field>
-        <Field label="订单"><select value={oid} onChange={(e) => setOid(e.target.value)}>{s.orders.filter((o) => o.type !== "erp").map((o) => <option key={o.id}>{o.id}</option>)}</select></Field>
-        <Btn sm onClick={() => Taowo.linkContract(cid, oid)}>关联</Btn>
+      <div className="row" style={{ margin: "12px 0" }}>
+        <label className="btn sm">选择本地文件
+          <input type="file" accept=".pdf,image/*,.html,.txt" hidden onChange={(e) => { upload(e.target.files[0]); e.target.value = ""; }} />
+        </label>
+        <span className="muted">{form.fileName || "未选择"}</span>
+        <Btn sm onClick={() => {
+          const row = Taowo.saveContract(form);
+          if (row) setForm({ ...form, title: "", fileName: "", fileUrl: "", mime: "" });
+        }}>上传</Btn>
       </div>
+    </div>
+  );
+}
+
+function ContractDetail({ s, id }) {
+  const c = s.contracts.find((x) => x.id === id);
+  if (!c) return <Empty title="合同不存在" action={<Btn onClick={() => go("/ops/contracts")}>返回</Btn>} />;
+  const src = Taowo.contractSrc(c);
+  return (
+    <div>
+      <div className="hrow">
+        <div>
+          <h1>{c.title || c.id}</h1>
+          <p>{dealerName(s, c.dealerId)} · {c.kind || c.type} · {c.quarter}</p>
+        </div>
+        <div className="row">
+          <Btn sm ghost onClick={() => downloadUrl(c.fileName || (c.id + ".html"), src)}>下载</Btn>
+          <Btn sm ghost onClick={() => go("/ops/contracts")}>返回列表</Btn>
+        </div>
+      </div>
+      {/^data:image\//.test(src) ? <img className="contract-view" src={src} alt="" /> : <iframe className="contract-view" title={c.id} src={src} />}
     </div>
   );
 }
@@ -1000,23 +1215,46 @@ function ApiOps({ s }) {
 function OrgOps({ s }) {
   const [name, setName] = useState("");
   const [account, setAccount] = useState("");
+  const [password, setPassword] = useState("");
   const [org, setOrg] = useState(s.orgs[0]?.name);
+  const [pwdUser, setPwdUser] = useState("");
+  const [pwdNext, setPwdNext] = useState("");
+  const canPwd = canSetOrgPassword();
+  const opsUsers = s.users.filter((u) => !u.role.startsWith("dealer"));
   return (
     <div>
-      <div className="hrow"><div><h1>组织与用户</h1><p>维护运营组织，创建、启停、查询账号</p></div></div>
+      <div className="hrow"><div><h1>组织与用户</h1><p>新建必须设密码；已创建的可改密。按钮跟随角色权限「设置密码」。</p></div></div>
       <DataTable columns={[{ key: "id", title: "组织" }, { key: "name", title: "名称" }, { key: "parent", title: "上级" }, { key: "people", title: "人数" }]} rows={s.orgs} />
       <h2 style={{ fontSize: 20, margin: "28px 0 12px", fontWeight: 500 }}>用户</h2>
       <DataTable columns={[
         { key: "account", title: "账号" }, { key: "name", title: "姓名" }, { key: "org", title: "组织" }, { key: "role", title: "角色" },
         { key: "status", title: "状态", render: (r) => statusLabel(r.status) },
-        { key: "op", title: "", render: (r) => r.role.startsWith("dealer") ? null : <span><button onClick={() => Taowo.toggleUser(r.id)}>{r.status === "active" ? "停用" : "启用"}</button> <button onClick={() => Taowo.resetPassword(r.id)}>重置密码</button></span> },
-      ]} rows={s.users.filter((u) => !u.role.startsWith("dealer"))} />
-      <div className="row" style={{ marginTop: 16 }}>
+        { key: "op", title: "", render: (r) => r.role.startsWith("dealer") ? null : (
+          <span>
+            <button onClick={() => Taowo.toggleUser(r.id)}>{r.status === "active" ? "停用" : "启用"}</button>
+            {canPwd ? <button onClick={() => { setPwdUser(r.id); setPwdNext(""); }}>改密</button> : null}
+          </span>
+        ) },
+      ]} rows={opsUsers} />
+      <div className="row" style={{ marginTop: 16, alignItems: "end" }}>
         <Field label="姓名"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
         <Field label="账号"><input value={account} onChange={(e) => setAccount(e.target.value)} /></Field>
         <Field label="组织"><select value={org} onChange={(e) => setOrg(e.target.value)}>{s.orgs.map((o) => <option key={o.id}>{o.name}</option>)}</select></Field>
-        <Btn sm onClick={() => Taowo.saveUser({ name, account, org, role: "ops_merch" })}>创建用户</Btn>
+        {canPwd ? <Field label="初始密码"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="必填" /></Field> : <p className="muted">无设置密码权限，不能新建账号</p>}
+        <Btn sm disabled={!canPwd} onClick={() => {
+          Taowo.saveUser({ name, account, org, role: "ops_merch", password });
+          setName(""); setAccount(""); setPassword("");
+        }}>创建用户</Btn>
       </div>
+      {canPwd && pwdUser && (
+        <div className="row" style={{ marginTop: 16, alignItems: "end" }}>
+          <Field label={"修改 " + (opsUsers.find((u) => u.id === pwdUser)?.account || "") + " 密码"}>
+            <input type="password" value={pwdNext} onChange={(e) => setPwdNext(e.target.value)} />
+          </Field>
+          <Btn sm onClick={() => { if (Taowo.setUserPassword(pwdUser, pwdNext)) { setPwdUser(""); setPwdNext(""); } }}>保存新密码</Btn>
+          <Btn sm ghost onClick={() => Taowo.resetPassword(pwdUser)}>重置为 123456</Btn>
+        </div>
+      )}
     </div>
   );
 }
@@ -1046,6 +1284,12 @@ function RoleOps({ s }) {
               </label>
             ))}
           </div>
+          <label style={{ display: "flex", gap: 8, marginTop: 16, alignItems: "center" }}>
+            <input type="checkbox" checked={picked.includes("*") || picked.includes("sys.*") || picked.includes("sys.password")} onChange={(e) => {
+              setPicked(e.target.checked ? Array.from(new Set(picked.concat("sys.password"))) : picked.filter((p) => p !== "sys.password"));
+            }} />
+            <span>设置 / 修改组织用户密码</span>
+          </label>
           <Btn sm style={{ marginTop: 16 }} onClick={() => Taowo.saveRole({ ...cur, perms: picked })}>保存权限</Btn>
         </div>
       </div>
@@ -1085,6 +1329,7 @@ function DictOps({ s }) {
 function OpsApp({ s, path, parts }) {
   if (!s.session || String(s.session.role).startsWith("dealer")) return <LoginView portal="ops" />;
   const id = parts && parts[2];
+  const leaf = parts && parts[3];
   let body = null;
   if (path === "/ops") body = <OpsToday s={s} />;
   else if (path === "/ops/cms" || path === "/ops/home") body = <CmsView s={s} />;
@@ -1094,6 +1339,7 @@ function OpsApp({ s, path, parts }) {
   else if (path === "/ops/accounts") body = <AccountsOps s={s} />;
   else if (path.startsWith("/ops/accounts/") && id) body = <AccountBindDetail s={s} id={id} />;
   else if (path === "/ops/master") body = <MasterView s={s} />;
+  else if (path.startsWith("/ops/products") && leaf) body = <ProductEdit s={s} id={leaf} />;
   else if (path.startsWith("/ops/products")) body = <ProductsOps s={s} type={path.indexOf("futures") >= 0 ? "futures" : "spot"} />;
   else if (path === "/ops/stock") body = <StockOps s={s} />;
   else if (path === "/ops/images" || path === "/ops/media" || path === "/ops/batch") body = <ImageOps s={s} />;
@@ -1107,6 +1353,7 @@ function OpsApp({ s, path, parts }) {
   else if (path === "/ops/returns") body = <ReturnOps s={s} />;
   else if (path.startsWith("/ops/returns/") && id) body = <ReturnDetail s={s} id={id} />;
   else if (path === "/ops/pay") body = <PayOps s={s} />;
+  else if (path.startsWith("/ops/contracts/") && id) body = <ContractDetail s={s} id={id} />;
   else if (path === "/ops/contracts") body = <ContractOps s={s} />;
   else if (path === "/ops/statements") body = <StatementOps s={s} />;
   else if (path === "/ops/campaigns") body = <CampaignOps s={s} />;

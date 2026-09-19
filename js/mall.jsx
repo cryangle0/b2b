@@ -1,39 +1,12 @@
 const { useState, useEffect } = React;
-const { Icon, Photo, go, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, DataTable, Qty, downloadText, productThumb, filterProducts } = window;
+const { Icon, Photo, go, Btn, Field, Modal, Empty, Money, statusLabel, accountStatus, DataTable, Qty, downloadText, downloadUrl, readLocalFile, dealerName, GoodsLines, contractPreview, productThumb, filterProducts } = window;
 
-function MallNav({ s, path }) {
+function MallNav({ s }) {
   const count = (s.cart || []).reduce((n, c) => n + c.qty, 0);
-  const productMenu = s.cms.productMenu || [
-    { label: "现货", href: "#/shop/spot" },
-    { label: "期货", href: "#/shop/futures" },
-    { label: "订货会", href: "#/fair" },
-  ];
-  const assetMenu = s.cms.assetMenu || [
-    { label: "合同", href: "#/contracts" },
-    { label: "对账单", href: "#/statements" },
-    { label: "企业资料", href: "#/company" },
-  ];
-  const productOn = path.startsWith("/shop") || path.startsWith("/fair") || path.startsWith("/p/");
-  const orderOn = path.startsWith("/orders");
-  const assetOn = ["/contracts", "/statements", "/company"].some((p) => path.startsWith(p));
   return (
     <header className="top">
       <a className="logo" href="#/">TAOWO<span>Order</span></a>
-      <nav className="nav">
-        <div className={"nav-drop" + (productOn ? " active" : "")}>
-          <a href="#/shop/spot" className={productOn ? "active" : ""}>产品</a>
-          <div className="drop">
-            {productMenu.map((m) => <a key={m.href} href={m.href}>{m.label}</a>)}
-          </div>
-        </div>
-        <a className={orderOn ? "active" : ""} href="#/orders">订单</a>
-        <div className={"nav-drop" + (assetOn ? " active" : "")}>
-          <a href="#/contracts" className={assetOn ? "active" : ""}>资产</a>
-          <div className="drop">
-            {assetMenu.map((m) => <a key={m.href} href={m.href}>{m.label}</a>)}
-          </div>
-        </div>
-      </nav>
+      <div />
       <div className="tools">
         <button className="iconbtn" onClick={() => go("/heart")} title="心愿单"><Icon name="heart" /></button>
         <button className="iconbtn" onClick={() => go("/bag")} title="购物袋">
@@ -46,6 +19,56 @@ function MallNav({ s, path }) {
         </button>
       </div>
     </header>
+  );
+}
+
+function MallSubnav({ s, path }) {
+  const productMenu = s.cms.productMenu || [
+    { label: "现货", href: "#/shop/spot" },
+    { label: "期货", href: "#/shop/futures" },
+    { label: "订货会", href: "#/fair" },
+  ];
+  const assetMenu = s.cms.assetMenu || [
+    { label: "合同", href: "#/contracts" },
+    { label: "对账单", href: "#/statements" },
+    { label: "企业资料", href: "#/company" },
+  ];
+  const items = (s.cms.categoryNav && s.cms.categoryNav.length) ? s.cms.categoryNav : [
+    { label: "产品", href: "#/shop/spot" },
+    { label: "订单", href: "#/orders" },
+    { label: "资产", href: "#/contracts" },
+  ];
+  const productOn = path.startsWith("/shop") || path.startsWith("/fair") || path.startsWith("/p/");
+  const orderOn = path.startsWith("/orders");
+  const assetOn = ["/contracts", "/statements", "/company"].some((p) => path.startsWith(p));
+  return (
+    <div className="mall-subnav">
+      <nav className="wrap">
+        {items.map((c) => {
+          if (c.label === "产品" || /shop|product/i.test(c.href || "")) {
+            return (
+              <div className="nav-drop" key={c.label}>
+                <a href={c.href || "#/shop/spot"} className={productOn ? "active" : ""}>产品</a>
+                <div className="drop">
+                  {productMenu.map((m) => <a key={m.href} href={m.href}>{m.label}</a>)}
+                </div>
+              </div>
+            );
+          }
+          if (c.label === "资产" || /contract|asset|company|statement/i.test(c.href || "")) {
+            return (
+              <div className="nav-drop" key={c.label}>
+                <a href={c.href || "#/contracts"} className={assetOn ? "active" : ""}>资产</a>
+                <div className="drop">
+                  {assetMenu.map((m) => <a key={m.href} href={m.href}>{m.label}</a>)}
+                </div>
+              </div>
+            );
+          }
+          return <a key={c.label} href={c.href} className={c.label === "订单" && orderOn ? "active" : ""}>{c.label}</a>;
+        })}
+      </nav>
+    </div>
   );
 }
 
@@ -118,31 +141,6 @@ function HomeView({ s }) {
   const h = heroes[i];
   return (
     <div>
-      <div className="home-cats wrap">
-        <b>分类</b>
-        <nav>
-          {(s.cms.categoryNav || [
-            { label: "产品", href: "#/shop/spot" },
-            { label: "订单", href: "#/orders" },
-            { label: "资产", href: "#/contracts" },
-          ]).map((c) => {
-            const product = c.label === "产品" || /shop|product/i.test(c.href || "");
-            if (!product) return <a key={c.label} href={c.href}>{c.label}</a>;
-            return (
-              <div className="nav-drop" key={c.label}>
-                <a href={c.href || "#/shop/spot"}>产品</a>
-                <div className="drop">
-                  {(s.cms.productMenu || [
-                    { label: "现货", href: "#/shop/spot" },
-                    { label: "期货", href: "#/shop/futures" },
-                    { label: "订货会", href: "#/fair" },
-                  ]).map((m) => <a key={m.href} href={m.href}>{m.label}</a>)}
-                </div>
-              </div>
-            );
-          })}
-        </nav>
-      </div>
       <section className="hero">
         <img src={h.img} alt="" onError={(e) => { e.target.style.display = "none"; }} />
         <div className="copy">
@@ -160,7 +158,17 @@ function HomeView({ s }) {
         </div>
       </a>
       {(s.cms.floors || []).map((floor) => {
-        const list = filterProducts(s.products, floor.query || { type: "spot" }).filter((p) => p.status === "live").slice(0, 6);
+        if (floor.kind === "image") {
+          return (
+            <a className="fairband" href={floor.href || "#/shop/spot"} key={floor.id}>
+              <img src={floor.img} alt="" />
+              <div className="copy"><h2>{floor.title}</h2></div>
+            </a>
+          );
+        }
+        const list = (floor.productIds && floor.productIds.length)
+          ? floor.productIds.map((id) => s.products.find((p) => p.id === id)).filter((p) => p && p.status === "live")
+          : filterProducts(s.products, floor.query || { type: "spot" }).filter((p) => p.status === "live").slice(0, 6);
         return (
           <div className="section wrap" key={floor.id} style={{ paddingBottom: 40 }}>
             <h2>{floor.title}</h2>
@@ -309,12 +317,12 @@ function PdpView({ s, id }) {
       <div className="pdp">
         <div className="pdp-media stacked">
           <div className="pdp-hero" style={{ background: p.color || "#e8e8e8" }}>
-            <Photo src={p.images[img] || p.images[0]} alt={p.name} color={p.color} />
+            <Photo key={p.images[img] || p.images[0]} src={p.images[img] || p.images[0]} alt={p.name} color={p.color} />
           </div>
           <div className="pdp-thumbs below">
             {p.images.map((src, i) => (
-              <button key={i} className={img === i ? "on" : ""} onClick={() => setImg(i)}>
-                <Photo src={src} alt="" color={p.color} />
+              <button type="button" key={src + i} className={img === i ? "on" : ""} onClick={() => setImg(i)}>
+                <Photo src={src} alt={"图" + (i + 1)} color={p.color} />
               </button>
             ))}
           </div>
@@ -326,20 +334,22 @@ function PdpView({ s, id }) {
           <div className="your-price"><span>经销价</span> {Money(p.price)}</div>
           <div className="muted">建议零售 {Money(p.retail)} · {p.warehouse}</div>
           <div className="size-head"><span>尺码矩阵</span><button className="linkish" onClick={() => Taowo.toast("鞋码 36–45 · 服装 XS–XXL")}>尺码表</button></div>
-          <p className="muted">有货尺码写入购物袋；缺货尺码写入心愿单。</p>
+          <p className="muted">边框内填写数量。有货进购物袋；无库存尺码仍展示，填数后加入心愿单。</p>
           <div className="sizegrid">
             {p.sizes.map((sz) => {
-              const st = p.stock[sz] || 0;
+              const st = Number(p.stock[sz] || 0);
               return (
                 <div className={"size " + (st <= 0 ? "off" : "")} key={sz}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><b>{sz}</b><span className="muted">{st ? "可订 " + st : "缺货"}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><b>{sz}</b><span className="muted">{st > 0 ? "可订 " + st : "无库存"}</span></div>
                   <input
                     type="text"
                     inputMode="numeric"
+                    placeholder="数量"
                     disabled={st > 0 && (!can || expired)}
                     value={qty[sz] || ""}
                     onChange={(e) => setQty({ ...qty, [sz]: e.target.value.replace(/[^\d]/g, "") })}
                   />
+                  {st <= 0 ? <div className="wish-hint">加入心愿单</div> : null}
                 </div>
               );
             })}
@@ -347,6 +357,12 @@ function PdpView({ s, id }) {
           <Btn block disabled={!bagQty && !wishQty} onClick={commit}>
             {bagQty ? "加入购物袋 · " + bagQty + " 件" : ""}{bagQty && wishQty ? "，" : ""}{wishQty ? "心愿单 · " + wishQty + " 件" : ""}{!bagQty && !wishQty ? "填写数量" : ""}
           </Btn>
+          <div style={{ marginTop: 10 }}>
+            <Btn ghost block disabled={!wishQty} onClick={() => {
+              Object.entries(wish).forEach(([sz, n]) => Taowo.addWish(p.id, sz, n));
+              if (!wishQty) Taowo.toast("请在无库存尺码填写数量", "err");
+            }}>加入心愿单{wishQty ? " · " + wishQty + " 件" : ""}</Btn>
+          </div>
           <div style={{ marginTop: 10 }}>
             <Btn ghost block disabled={!bagQty} onClick={() => setBuy(true)}>立即下单有货尺码</Btn>
           </div>
@@ -597,6 +613,7 @@ function OrderDetail({ s, id }) {
         <div key={sh.id} style={{ padding: "12px 0", borderBottom: "1px solid var(--line)" }}>
           <b>{sh.id}</b> · {sh.date} · {sh.express} {sh.tracking}
           <div className="muted">发货日期 {sh.date}</div>
+          <div style={{ marginTop: 8 }}><GoodsLines lines={sh.lines} /></div>
           <div style={{ marginTop: 8 }}>
             {(s.tracks[sh.tracking] || []).map((t, i) => <div key={i} className="muted">{t.t} {t.e}</div>)}
           </div>
@@ -657,12 +674,13 @@ function HeartView({ s }) {
       {wishes.length ? wishes.map((w, i) => {
         const p = Taowo.product(w.pid);
         return (
-          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid var(--line)" }}>
-            <div>{p?.name} · {w.size} × {w.qty || 1}<div className="muted">{w.note}</div></div>
+          <div className="wish-row" key={i}>
+            <div className="goods-thumb"><Photo src={productThumb(p)} alt={p?.name} color={p?.color} /></div>
+            <div style={{ flex: 1 }}>{p?.name} · {w.pid}<div className="muted">{w.size} × {w.qty || 1} · {w.note}</div></div>
             <Btn sm ghost onClick={() => go("/p/" + w.pid)}>返回订购</Btn>
           </div>
         );
-      }) : <p className="muted">缺货尺码可加入，到货后站内提醒。</p>}
+      }) : <p className="muted">详情页无库存尺码填写数量后加入。到货后站内提醒。</p>}
       <h2 style={{ fontSize: 24, margin: "40px 0 12px", fontWeight: 400 }}>收藏</h2>
       <div className="plp-grid">{favs.map((p) => <ProductCard key={p.id} p={p} s={s} />)}</div>
     </div>
@@ -707,6 +725,47 @@ function SimpleList({ title, rows, columns }) {
     <div className="wrap" style={{ padding: "32px 0 80px" }}>
       <h1 style={{ fontSize: 36, fontWeight: 400, marginBottom: 20 }}>{title}</h1>
       <DataTable columns={columns} rows={rows} />
+    </div>
+  );
+}
+
+function ContractMall({ s }) {
+  const rows = s.contracts.filter((c) => c.dealerId === s.session.dealerId);
+  return (
+    <div className="wrap" style={{ padding: "32px 0 80px" }}>
+      <h1 style={{ fontSize: 36, fontWeight: 400, marginBottom: 20 }}>合同</h1>
+      <DataTable
+        onRow={(r) => go("/contracts/" + r.id)}
+        columns={[
+          { key: "dealer", title: "经销商", render: (r) => dealerName(s, r.dealerId) },
+          { key: "kind", title: "合同类型", render: (r) => r.kind || r.type || "" },
+          { key: "quarter", title: "季度", render: (r) => r.quarter || "" },
+          { key: "title", title: "名称" },
+          { key: "status", title: "状态" },
+        ]}
+        rows={rows}
+      />
+    </div>
+  );
+}
+
+function ContractMallDetail({ s, id }) {
+  const c = s.contracts.find((x) => x.id === id);
+  if (!c) return <Empty title="合同不存在" action={<Btn onClick={() => go("/contracts")}>返回</Btn>} />;
+  const src = Taowo.contractSrc(c);
+  return (
+    <div className="wrap" style={{ padding: "32px 0 80px" }}>
+      <div className="hrow">
+        <div>
+          <h1>{c.title || c.id}</h1>
+          <p className="muted">{dealerName(s, c.dealerId)} · {c.kind || c.type} · {c.quarter}</p>
+        </div>
+        <div className="row">
+          <Btn sm ghost onClick={() => downloadUrl(c.fileName || (c.id + ".html"), src)}>下载</Btn>
+          <Btn sm ghost onClick={() => go("/contracts")}>返回</Btn>
+        </div>
+      </div>
+      {/^data:image\//.test(src) ? <img className="contract-view" src={src} alt="" /> : <iframe className="contract-view" title={c.id} src={src} />}
     </div>
   );
 }
@@ -835,7 +894,8 @@ function MallChrome({ s, path, notice, children }) {
     <div className={"mall-shell" + (notice ? " has-notice" : "")}>
       <div className="chrome">
         {notice}
-        <MallNav s={s} path={path} />
+        <MallNav s={s} />
+        <MallSubnav s={s} path={path} />
       </div>
       {children}
     </div>
@@ -870,7 +930,8 @@ function MallApp({ s, path, parts, query }) {
   else if (path === "/request") body = <HeartView s={s} />;
   else if (path === "/returns") body = <ReturnView s={s} />;
   else if (path === "/media") body = <MediaView s={s} />;
-  else if (path === "/contracts") body = <SimpleList title="合同" rows={s.contracts.filter((c) => c.dealerId === s.session.dealerId)} columns={[{ key: "id", title: "编号" }, { key: "title", title: "名称" }, { key: "status", title: "状态" }, { key: "from", title: "起" }, { key: "to", title: "止" }, { key: "file", title: "文件", render: (r) => <button onClick={() => Taowo.toast("下载 " + r.file)}>下载</button> }]} />;
+  else if (parts[0] === "contracts" && parts[1]) body = <ContractMallDetail s={s} id={parts[1]} />;
+  else if (path === "/contracts") body = <ContractMall s={s} />;
   else if (path === "/statements") body = <SimpleList title="对账单" rows={s.statements.filter((c) => c.dealerId === s.session.dealerId)} columns={[{ key: "id", title: "编号" }, { key: "period", title: "账期" }, { key: "amount", title: "应付", render: (r) => Money(r.amount) }, { key: "paid", title: "已付", render: (r) => Money(r.paid) }, { key: "status", title: "状态" }, { key: "op", title: "", render: (r) => r.status === "待经销商核对" ? <button onClick={() => Taowo.confirmStatement(r.id)}>核对无误</button> : "—"}]} />;
   else if (path === "/notices") body = <SimpleList title="提醒" rows={s.notices} columns={[{ key: "title", title: "内容" }, { key: "time", title: "时间" }, { key: "read", title: "状态", render: (r) => r.read ? "已读" : "未读" }, { key: "go", title: "", render: (r) => <span><a href={r.href} onClick={() => Taowo.markNotice(r.id)}>打开</a> · <button onClick={() => Taowo.markNotice(r.id)}>标已读</button></span> }]} />;
   else body = <Empty title="页面不存在" text={path} />;
